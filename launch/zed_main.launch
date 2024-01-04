@@ -24,7 +24,6 @@
     <node pkg="map_server" name="map_server" type="map_server" args="$(arg map_img_name)"/>
 
     <!-- Nodes -->
-    <include file ="$(find el2425_standards)/launch/infra1.launch"/>
     <include file="$(find zed_wrapper)/launch/zed.launch">
         <arg name="camera_name" value="zed"/>
     </include>
@@ -62,22 +61,12 @@
     <node name="publish_to_city" pkg="infra" type="city_roadblock_pub.py" output="screen"></node>
     <node name="people_crosswalk_busstop" pkg="infra" type="people_crosswalk.py" output="screen"></node>
 
-    <!-- These nodes throttle the output frequency of the publishers to the correct frequency as agreed upon between the gropus -->
-    <node name="car_throttler" pkg="topic_tools" type="throttle" args="messages person_state_estimation/person_states 10.0 pedestrians"/>
-    <node name="crosswalk_throttler" pkg="topic_tools" type="throttle" args="messages people_count_freq_too_high 1.0 people_count"/>
-    <node name="roadblock_throttler" pkg="topic_tools" type="throttle" args="messages roadblocks_freq_too_high 1.0 roadblocks"/>
-
     <!-- FOR CALIBRATION: 
     1. COMMENT "camera2map" NODE AND UNCOMMENT "aruco2map" NODE
     2. READ POSITION OF ARUCO IN WORLD COORDS AND ENTER THEM INTO args = "x y z quatx quaty qautz quatw map aruco[index]" -->
     <node name="camera2map" pkg="infra" type="tf_camera2map.py" output="screen" launch-prefix="bash -c 'sleep $(arg node_start_delay); $0 $@' " ></node>
     <!-- <node name ="aruco2map" pkg = "infra" type = "tf_aruco2map.py" output = "screen" launch-prefix="bash -c 'sleep $(arg node_start_delay); $0 $@' "></node> -->
-
-    <!-- Assuming taking the gamma minus pi/2 as angles for yaw-->
-    <node pkg="tf2_ros" type="static_transform_publisher" name="link_map_aruco10" args="-2.76 -5.35 1.8 0.671 -0.195 -0.21 0.684 map aruco10"/>
-    <node pkg="tf2_ros" type="static_transform_publisher" name="link_map_aruco11" args="-2.41 -5.5 1.8 0.671 -0.195 -0.21 0.684 map aruco11"/>
-    <node pkg="tf2_ros" type="static_transform_publisher" name="link_map_aruco13" args="-1.19 0.77 0.30 0.193 0.680 0.679 0.189 map aruco13"/>
-
+    
     <!-- FOR LOGGING: UNCOMMENT NODE -->
     <!-- <node name="path_logger" pkg="infra" type="path_logger.py" output="screen"></node> -->
 </launch>

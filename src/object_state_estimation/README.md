@@ -8,11 +8,6 @@ The object_state_estimation package uses a pair of zed-cameras to estimate traff
 - filterpy
 - shapely
 
-##### ROS packages
-- jsk_pcl_msgs
-- infra_msgs
-- el2425_standards
-
 ##### Packages for the ZED object detection:
 - aliencontrol
 - ros_abconnect
