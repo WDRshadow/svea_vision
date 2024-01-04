@@ -1,6 +1,6 @@
-# Object State Estimation
+# Svea Vision
 
-The object_state_estimation package uses a pair of zed-cameras to estimate traffic participants and obstacles.
+The svea_vision package uses a pair of zed-cameras to estimate traffic participants and obstacles.
 
 ## Requirements
 ##### Python dependencies
