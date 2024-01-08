@@ -26,7 +26,7 @@ class PersonPrediction:
     threshold = 0.5  # TODO: Set threshold better?
 
     def __init__(self):
-        rospy.init_node("person_state_estimation", anonymous=True)
+        rospy.init_node("object_state_estimation", anonymous=True)
         self.pub = rospy.Publisher("~person_states",
                                    PersonStateArray,
                                    queue_size=10)

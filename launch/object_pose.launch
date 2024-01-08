@@ -46,5 +46,5 @@
         <param name="frame_id"          value="$(arg frame_id)"/>
     </node>
 
-    <node name="person_state_estimation" pkg="svea_vision" type="person_state_estimation.py" output="screen"/> 
+    <node name="object_state_estimation" pkg="svea_vision" type="object_state_estimation.py" output="screen"/> 
 </launch>
