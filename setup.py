@@ -6,8 +6,8 @@ from catkin_pkg.python_setup import generate_distutils_setup
 # fetch values from package.xml
 setup_args = generate_distutils_setup(
     scripts=[],
-    packages=['svea_vision', 'sort'],
-    package_dir={'': 'src'},
+    packages=['svea_vision', 'sort', 'msgs.msg'],
+    package_dir={'msgs': './', '': 'src'},
     requires=['rospy'],
 )
 

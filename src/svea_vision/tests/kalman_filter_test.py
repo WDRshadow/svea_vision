@@ -1,6 +1,8 @@
+import sys
+sys.path.append('../')
 import matplotlib.pyplot as plt
 import random
-from svea_vision.kalman_filter import KF
+from src.svea_vision.kalman_filter import KF
 from math import sin, cos, pi, atan2
 
 
@@ -29,11 +31,10 @@ def linear_test(T):
 
 # Circle
 def circle_test(radius, T):
-    def PointsInCircum(r, n=100):
+    def PointsInCircle(r, n=100):
         return [(cos(2*pi/n*x)*r, sin(2*pi/n*x)*r) for x in range(0, n+1)]
-    
 
-    circle = PointsInCircum(radius, T)
+    circle = PointsInCircle(radius, T)
     circle_traj_x, circle_traj_y = [], []
     for x, y in circle:
         circle_traj_x.append(x+random.randrange(-10, 10)/10)

@@ -1,0 +1,4 @@
+geometry_msgs/PoseWithCovariance pose
+geometry_msgs/Point obstacle_width_point_1 
+geometry_msgs/Point obstacle_width_point_2
+Object object

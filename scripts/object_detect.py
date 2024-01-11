@@ -9,7 +9,7 @@ import numpy as np
 from ultralytics import YOLO
 from sort import Sort
 
-from rsu_msgs.msg import Object, StampedObjectArray
+from msgs.msg import Object, StampedObjectArray
 
 
 def load_param(name, value=None):

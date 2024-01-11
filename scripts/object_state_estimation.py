@@ -6,10 +6,13 @@ from math import sin, cos, atan2
 import rospy
 from el2425_standards.msg import PersonState, PersonStateArray # TODO
 from geometry_msgs.msg import Pose
-from rsu_msgs.msg import StampedObjectPoseArray
+from msgs.msg import StampedObjectPoseArray
 from scipy.optimize import curve_fit
-from kalman_filter import KF
+from src.svea_vision.kalman_filter import KF
 
+
+# Purpose: To track and predict the state of each person detected by a camera system, 
+# using a combination of interpolation, Kalman Filter, and curve fitting.
 
 class PersonPrediction:
     """ Class that estimates the states of each detected person 
