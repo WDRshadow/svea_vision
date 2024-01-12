@@ -12,7 +12,6 @@ The svea_vision package uses a pair of zed-cameras to estimate traffic participa
 - aliencontrol
 - ros_abconnect
 - rsu_core
-- rsu_msgs
 - vision_opencv
 - zed-ros-wrapper
 - realsense-ros

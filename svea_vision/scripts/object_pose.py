@@ -11,7 +11,7 @@ from image_geometry import PinholeCameraModel
 from geometry_msgs.msg import PointStamped, Vector3
 from visualization_msgs.msg import Marker
 
-from msgs.msg import StampedObjectArray, StampedObjectPoseArray, ObjectPose
+from svea_vision_msgs.msg import StampedObjectArray, StampedObjectPoseArray, ObjectPose
 from tf2_geometry_msgs import do_transform_point
 
 

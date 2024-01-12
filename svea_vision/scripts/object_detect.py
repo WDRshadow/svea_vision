@@ -9,7 +9,7 @@ import numpy as np
 from ultralytics import YOLO
 from sort import Sort
 
-from msgs.msg import Object, StampedObjectArray
+from svea_vision_msgs.msg import Object, StampedObjectArray
 
 
 def load_param(name, value=None):
