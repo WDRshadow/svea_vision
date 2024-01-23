@@ -159,8 +159,8 @@ class PersonStatePredictor:
         # Cleanup the dictionary of person_states
         self.__clean_up_dict(msg.header.seq)
 
-        # Put the list of person_state in the message and publish it
-        personStateArray_msg.person_state = list(self.person_states.values())
+        # Put the list of personstate in the message and publish it
+        personStateArray_msg.personstate = list(self.person_states.values())
         self.pub.publish(personStateArray_msg)
 
     def __calculate_velocity_heading(self, c0, c1):
