@@ -1,2 +1,2 @@
 std_msgs/Header header
-PersonState[] personstates
+PersonState[] person_state

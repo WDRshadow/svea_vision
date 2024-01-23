@@ -22,11 +22,6 @@ class KF(KalmanFilter):
         id to keep track of separate measurements.
          - The state is: [x,y,v,phi]"""
 
-        # check parameters in https://github.com/rlabbe/filterpy/blob/master/filterpy/kalman/kalman_filter.py
-        # e.g. if you are tracking the position and velocity of an object in two dimensions, dim_x would be 4.
-        # So state.x is [x, y, v_x. v_y] right?
-        # e.g. if the sensor provides you with position in (x,y), dim_z would be 2.
-        # So in our case, from the camera we cannot get the velocity of the heading, so why dim_z = 4?
         super().__init__(
             dim_x=4, dim_z=4
         )  # dimensions of state vector and measurement vector
