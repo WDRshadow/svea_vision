@@ -38,7 +38,7 @@ class PersonStatePredictor:
         """Subscribes to the topic containing only detected
         persons and applies the function __callback."""
         rospy.Subscriber(
-            "person_state_estimation/person_states",
+            "/data_splitter/persons",
             StampedObjectPoseArray,
             self.__callback,
         )
@@ -51,14 +51,17 @@ class PersonStatePredictor:
         It interpolates person locations, stores the states of persons, and publishes
         the estimated person states to a 'person_state_estimation/person_states' topic.
         This implementation keeps sending the states of persons who have
-        dropped out of frame, because the person might have dropped randomly."""
+        dropped out of frame, because the person might have dropped randomly.
+        
+        :param msg: message containing the detected persons
+        :return: None"""
 
         personStateArray_msg = PersonStateArray()
         personStateArray_msg.header = msg.header
 
-        for person in msg.persons:
+        for person in msg.objects:
             # Get the person's ID and current location
-            person_id = person.person.id
+            person_id = person.object.id
             person_loc = (
                 person.pose.pose.position.x,
                 person.pose.pose.position.y,
