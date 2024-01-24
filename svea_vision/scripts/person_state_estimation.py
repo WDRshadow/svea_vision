@@ -38,7 +38,7 @@ class PersonStatePredictor:
         """Subscribes to the topic containing only detected
         persons and applies the function __callback."""
         rospy.Subscriber(
-            "/data_splitter/persons",
+            "/detection_splitter/persons",
             StampedObjectPoseArray,
             self.__callback,
         )

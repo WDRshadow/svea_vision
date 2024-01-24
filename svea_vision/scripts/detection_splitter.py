@@ -11,7 +11,7 @@ class DataSplitting:
         and 'DataSplitting.GetOther()'"""
 
     def __init__(self):
-        rospy.init_node('data_splitter', anonymous=True)
+        rospy.init_node('detection_splitter', anonymous=True)
         self.person_pub = rospy.Publisher(
             "~persons", StampedObjectPoseArray, queue_size=10)
         self.vehicle_pub = rospy.Publisher(
