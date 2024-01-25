@@ -46,6 +46,4 @@
         <param name="frame_id"          value="$(arg frame_id)"/>
     </node>
 
-    <node name="detection_splitter" pkg="svea_vision" type="detection_splitter.py" output="screen" ></node>
-    <node name="person_state_estimation" pkg="svea_vision" type="person_state_estimation.py" output="screen"/> 
 </launch>
