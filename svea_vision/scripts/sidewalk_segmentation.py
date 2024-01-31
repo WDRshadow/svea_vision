@@ -194,7 +194,7 @@ class SidewalkSegementation:
         # Transform pointcloud to frame_id
         try:
             transform_stamped = self.tf_buf.lookup_transform(self.frame_id, extracted_pc_msg.header.frame_id, extracted_pc_msg.header.stamp)
-        except:
+        except tf2_ros.LookupException:
             rospy.logwarn("{}: Transform lookup from {} to {} failed for the requested time. Using latest transform instead.".format(
                 rospy.get_name(), extracted_pc_msg.header.frame_id, self.frame_id))
             transform_stamped = self.tf_buf.lookup_transform(self.frame_id, extracted_pc_msg.header.frame_id, rospy.Time(0))
