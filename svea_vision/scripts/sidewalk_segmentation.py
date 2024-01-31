@@ -2,8 +2,10 @@
 
 import rospy
 import rospkg
+import tf2_ros
 import message_filters as mf
 from cv_bridge import CvBridge
+from tf2_geometry_msgs import do_transform_cloud
 from sensor_msgs.msg import Image, PointCloud2
 
 import os
@@ -63,6 +65,7 @@ class SidewalkSegementation:
             self.prompt_text = load_param('~text_prompt_text', 'a sidewalk or footpath or walkway or paved path for humans to walk on')
             
             # Other parameters
+            self.frame_id = load_param('~frame_id', 'map')
             self.publish_ann = load_param('~publish_ann', False)
             self.verbose = load_param('~verbose', False)
             
@@ -82,6 +85,10 @@ class SidewalkSegementation:
             
             # CV Bridge
             self.cv_bridge = CvBridge()
+            
+            # TF2
+            self.tf_buf = tf2_ros.Buffer()
+            self.tf_listener = tf2_ros.TransformListener(self.tf_buf)
             
             # Publishers
             self.sidewalk_mask_pub = rospy.Publisher(self.sidewalk_mask_topic, Image, queue_size=1)
@@ -181,8 +188,11 @@ class SidewalkSegementation:
         sidewalk_mask, sidewalk_results = self.segment_image(img_msg)
         
         # Extract pointcloud
-        sidewalk_pc_msg = self.extract_pointcloud(pc_msg, sidewalk_mask)
+        extracted_pc_msg = self.extract_pointcloud(pc_msg, sidewalk_mask)
         self.log_times['extract_pc_time'] = time.time()
+        
+        # Transform pointcloud to frame_id
+        sidewalk_pc_msg = do_transform_cloud(extracted_pc_msg, self.tf_buf.lookup_transform(self.frame_id, extracted_pc_msg.header.frame_id, rospy.Time(0)))
 
         # Publish mask
         mask_msg = self.cv_bridge.cv2_to_imgmsg(sidewalk_mask, encoding='mono8')
