@@ -195,7 +195,8 @@ class SidewalkSegementation:
         try:
             transform_stamped = self.tf_buf.lookup_transform(self.frame_id, extracted_pc_msg.header.frame_id, extracted_pc_msg.header.stamp)
         except:
-            rospy.logwarn("{}: Transform lookup failed, using latest transform instead".format(rospy.get_name()))
+            rospy.logwarn("{}: Transform lookup from {} to {} failed for the requested time. Using latest transform instead.".format(
+                rospy.get_name(), extracted_pc_msg.header.frame_id, self.frame_id))
             transform_stamped = self.tf_buf.lookup_transform(self.frame_id, extracted_pc_msg.header.frame_id, rospy.Time(0))
         sidewalk_pc_msg = do_transform_cloud(extracted_pc_msg, transform_stamped)
         
