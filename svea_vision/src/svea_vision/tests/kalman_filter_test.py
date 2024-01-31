@@ -1,5 +1,6 @@
 import sys
-sys.path.append('../')
+
+sys.path.append("../")
 import matplotlib.pyplot as plt
 import random
 from src.svea_vision.kalman_filter import KF
@@ -12,16 +13,16 @@ def linear_test(T):
     m_traj = [[0, 0]]
     kf = KF(1, *s)
 
-    truth_traj_x = [i/10 for i in range(0, T)]
-    truth_traj_y = [i/10 + random.randrange(-10, 10)/10 for i in range(0, T)]
+    truth_traj_x = [i / 10 for i in range(0, T)]
+    truth_traj_y = [i / 10 + random.randrange(-10, 10) / 10 for i in range(0, T)]
 
     for t in range(1, T):
         kf.predict()
-        phi = t/5  # Derivative of truth_traj_y equation
+        phi = t / 5  # Derivative of truth_traj_y equation
         z = [truth_traj_x[t], truth_traj_y[t], 1, phi]
         kf.update(z)
         m_traj.append(kf.x[0:2])
-    
+
     m_traj_x, m_traj_y = [], []
     for t in range(T):
         m_traj_x.append(m_traj[t][0])
@@ -29,16 +30,19 @@ def linear_test(T):
 
     return (truth_traj_x, truth_traj_y), (m_traj_x, m_traj_y)
 
+
 # Circle
 def circle_test(radius, T):
     def PointsInCircle(r, n=100):
-        return [(cos(2*pi/n*x)*r, sin(2*pi/n*x)*r) for x in range(0, n+1)]
+        return [
+            (cos(2 * pi / n * x) * r, sin(2 * pi / n * x) * r) for x in range(0, n + 1)
+        ]
 
     circle = PointsInCircle(radius, T)
     circle_traj_x, circle_traj_y = [], []
     for x, y in circle:
-        circle_traj_x.append(x+random.randrange(-10, 10)/10)
-        circle_traj_y.append(y+random.randrange(-10, 10)/10)
+        circle_traj_x.append(x + random.randrange(-10, 10) / 10)
+        circle_traj_y.append(y + random.randrange(-10, 10) / 10)
     s = [[radius, 0], 1, pi]
     kf = KF(1, *s)
 
@@ -46,8 +50,8 @@ def circle_test(radius, T):
 
     for t in range(1, T):
         kf.predict()
-        diff_y = circle[t][1] - circle[t-1][1]
-        diff_x = circle[t][0] - circle[t-1][0]
+        diff_y = circle[t][1] - circle[t - 1][1]
+        diff_x = circle[t][0] - circle[t - 1][0]
         # Derivative of circle_traj_y equation
         phi = atan2(diff_y, diff_x)
         z = [circle_traj_x[t], circle_traj_y[t], 1, phi]
@@ -61,6 +65,7 @@ def circle_test(radius, T):
 
     return (circle_traj_x, circle_traj_y), (c_traj_x, c_traj_y)
 
+
 if __name__ == "__main__":
     T = 100
     radius = 10
@@ -69,10 +74,11 @@ if __name__ == "__main__":
     fig, (ax1, ax2) = plt.subplots(1, 2)
     plt.ion()
     fig.suptitle("Kalman filter estimates of different trajectories")
-    ax1.set_xlim([-1, T/10+1]), ax1.set_ylim([-1, T/10+1])
-    ax2.set_xlim([-radius*1.4, radius*1.4]
-                 ), ax2.set_ylim([-radius*1.4, radius*1.4])
-    
+    ax1.set_xlim([-1, T / 10 + 1]), ax1.set_ylim([-1, T / 10 + 1])
+    ax2.set_xlim([-radius * 1.4, radius * 1.4]), ax2.set_ylim(
+        [-radius * 1.4, radius * 1.4]
+    )
+
     # Axis 1 = Linear
     (truth_traj_x, truth_traj_y), (m_traj_x, m_traj_y) = linear_test(T)
     ax1.plot(truth_traj_x[0], truth_traj_y[0], color="green")
@@ -101,5 +107,5 @@ if __name__ == "__main__":
         ax2.plot(c_traj_x[0:t], c_traj_y[0:t], color="orange")
         plt.pause(0.005)
         plt.show()
-        
+
     plt.pause(5)

@@ -3,28 +3,32 @@ from filterpy.kalman import KalmanFilter
 import numpy as np
 from math import sin, cos
 
-# KalmanFilters performance depends on the correct setting of parameters 
+# KalmanFilters performance depends on the correct setting of parameters
 # like the process noise, measurement noise, and the initial state estimate.
 
 
-# KalmanFilter module implements the linear Kalman filter in both 
+# KalmanFilter module implements the linear Kalman filter in both
 # an object oriented and procedural form.
 class KF(KalmanFilter):
-    def __init__(self, id, init_pos: list, init_v: float, init_phi: float, frequency_of_measurements: float = 14.5):
-        """ Kalman Filter implementation that also use the 
-            id to keep track of separate measurements. 
-             - The state is: [x,y,v,phi]"""
-        
-        # check parameters in https://github.com/rlabbe/filterpy/blob/master/filterpy/kalman/kalman_filter.py
-        # e.g. if you are tracking the position and velocity of an object in two dimensions, dim_x would be 4.
-        # So state.x is [x, y, v_x. v_y] right? 
-        # e.g. if the sensor provides you with position in (x,y), dim_z would be 2.
-        # So in our case, from the camera we cannot get the velocity of the heading, so why dim_z = 4?
-        super().__init__(dim_x=4, dim_z=4) # dimensions of state vector and measurement vector
+    def __init__(
+        self,
+        id,
+        init_pos: list,
+        init_v: float,
+        init_phi: float,
+        frequency_of_measurements: float = 14.5,
+    ):
+        """Kalman Filter implementation that also use the
+        id to keep track of separate measurements.
+         - The state is: [x,y,v,phi]"""
+
+        super().__init__(
+            dim_x=4, dim_z=4
+        )  # dimensions of state vector and measurement vector
 
         # Set class attributes
         self.id = id
-        self.dt = 1/frequency_of_measurements
+        self.dt = 1 / frequency_of_measurements
 
         process_variance = 0.13
         covariance = 2
@@ -37,23 +41,35 @@ class KF(KalmanFilter):
 
         # Control model (based on previous locations)
         # State Transition matrix F to predict the state in the next time period (epoch)
-        self.F = np.array([[1, 0, self.dt*cos(self.x[3]), 0],
-                           [0, 1, self.dt*sin(self.x[3]), 0],
-                           [0, 0, 1, 0],
-                           [0, 0, 0, 1]])
+        self.F = np.array(
+            [
+                [1, 0, self.dt * cos(self.x[3]), 0],
+                [0, 1, self.dt * sin(self.x[3]), 0],
+                [0, 0, 1, 0],
+                [0, 0, 0, 1],
+            ]
+        )
 
         # Process uncertainty/noise
         # Covariance matrix Q specifies the process covariance. In Bayesian terms, this
-        # prediction is called the *prior*, which you can think as the estimate 
+        # prediction is called the *prior*, which you can think as the estimate
         # prior to incorporating the measurement.
-        self.Q = process_variance * np.eye(len(self.x), len(self.x)) # Process noise covariance matrix
+        self.Q = process_variance * np.eye(
+            len(self.x), len(self.x)
+        )  # Process noise covariance matrix
 
         # Covariance matrix
-        self.P = covariance*np.eye(len(self.x), len(self.x)) # covariance matrix of state x
-        self.R = np.array([[measurement_variance, 0, 0, 0], # Measurement noise covariance matrix
-                           [0, measurement_variance, 0, 0],
-                           [0, 0, v_measurement_var, 0],
-                           [0, 0, 0, phi_measurement_var]])
+        self.P = covariance * np.eye(
+            len(self.x), len(self.x)
+        )  # covariance matrix of state x
+        self.R = np.array(
+            [
+                [measurement_variance, 0, 0, 0],  # Measurement noise covariance matrix
+                [0, measurement_variance, 0, 0],
+                [0, 0, v_measurement_var, 0],
+                [0, 0, 0, phi_measurement_var],
+            ]
+        )
 
         # Measurement model
         self.H = np.eye(len(self.x), len(self.x))

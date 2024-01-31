@@ -20,35 +20,34 @@ def load_param(name, value=None):
         assert rospy.has_param(name), f'Missing parameter "{name}"'
     return rospy.get_param(name, value)
 
+
 def replace_base(old, new):
     split_last = lambda xs: (xs[:-1], xs[-1])
-    is_private = new.startswith('~')
-    is_global = new.startswith('/')
+    is_private = new.startswith("~")
+    is_global = new.startswith("/")
     assert not (is_private or is_global)
-    ns, _ = split_last(old.split('/'))
-    ns += new.split('/')
-    return '/'.join(ns)
+    ns, _ = split_last(old.split("/"))
+    ns += new.split("/")
+    return "/".join(ns)
 
 
 class object_pose:
-
     def __init__(self):
-
         ## Initialize node
 
-        rospy.init_node('object_pose')
+        rospy.init_node("object_pose")
 
         ## Parameters
 
-        self.SUB_OBJECTS = load_param('~sub_objects', 'objects')
+        self.SUB_OBJECTS = load_param("~sub_objects", "objects")
 
-        self.SUB_DEPTH_IMAGE = load_param('~sub_depth_image', 'depth_image')
-        self.SUB_CAMERA_INFO = replace_base(self.SUB_DEPTH_IMAGE, 'camera_info')
+        self.SUB_DEPTH_IMAGE = load_param("~sub_depth_image", "depth_image")
+        self.SUB_CAMERA_INFO = replace_base(self.SUB_DEPTH_IMAGE, "camera_info")
 
-        self.PUB_OBJECTPOSES = load_param('~pub_objectposes', 'objectposes')
-        self.PUB_OBJECTMARKERS = load_param('~pub_objectmarkers', 'objectmarkers')
+        self.PUB_OBJECTPOSES = load_param("~pub_objectposes", "objectposes")
+        self.PUB_OBJECTMARKERS = load_param("~pub_objectmarkers", "objectmarkers")
 
-        self.FRAME_ID = load_param('~frame_id', 'map')
+        self.FRAME_ID = load_param("~frame_id", "map")
 
         ## Camera model
 
@@ -61,18 +60,25 @@ class object_pose:
 
         ## Publishers
 
-        self.pub_objectposes = rospy.Publisher(self.PUB_OBJECTPOSES, StampedObjectPoseArray, queue_size=10)
+        self.pub_objectposes = rospy.Publisher(
+            self.PUB_OBJECTPOSES, StampedObjectPoseArray, queue_size=10
+        )
         rospy.loginfo(self.PUB_OBJECTPOSES)
 
-        self.pub_objectmarkers = rospy.Publisher(self.PUB_OBJECTMARKERS, Marker, queue_size=10)
+        self.pub_objectmarkers = rospy.Publisher(
+            self.PUB_OBJECTMARKERS, Marker, queue_size=10
+        )
 
         ## Subscribers
 
-        self.ts = mf.TimeSynchronizer([
-            mf.Subscriber(self.SUB_OBJECTS, StampedObjectArray),
-            mf.Subscriber(self.SUB_DEPTH_IMAGE, Image),
-            mf.Subscriber(self.SUB_CAMERA_INFO, CameraInfo),
-        ], queue_size=10)
+        self.ts = mf.TimeSynchronizer(
+            [
+                mf.Subscriber(self.SUB_OBJECTS, StampedObjectArray),
+                mf.Subscriber(self.SUB_DEPTH_IMAGE, Image),
+                mf.Subscriber(self.SUB_CAMERA_INFO, CameraInfo),
+            ],
+            queue_size=10,
+        )
         self.ts.registerCallback(self.callback)
 
         rospy.loginfo(self.SUB_OBJECTS)
@@ -82,14 +88,15 @@ class object_pose:
         rospy.spin()
 
     def callback(self, object_array, image, camera_info):
-
         ## Load camera info
 
         self.camera_model.fromCameraInfo(camera_info)
 
         ## Prepare depth map
 
-        depth_map = np.frombuffer(image.data, dtype=np.float32).reshape(image.height, image.width)
+        depth_map = np.frombuffer(image.data, dtype=np.float32).reshape(
+            image.height, image.width
+        )
         H, W = depth_map.shape[:2]
 
         ## Project pixel to 3D coordinate for each object
@@ -97,7 +104,6 @@ class object_pose:
         objects = []
 
         for obj in object_array.objects:
-
             ## Get depth of object
             # 1. create a mask for the region of interest
             # 2. Segment by thresholding (pick out the foreground)
@@ -134,7 +140,7 @@ class object_pose:
             d = depth_map[roi_mask][segm_mask].mean()
 
             # Fudge factor
-            d += d/16
+            d += d / 16
 
             ## Projection
             # 1. take middle pixel of region of interest
@@ -149,13 +155,15 @@ class object_pose:
 
             # Create point in camera frame
             ps = PointStamped()
-            ps.header = object_array.header 
+            ps.header = object_array.header
             ps.point.x = x
-            ps.point.y = y 
+            ps.point.y = y
             ps.point.z = z
 
             # Create point in map frame
-            trans = self.tf_buf.lookup_transform(self.FRAME_ID, ps.header.frame_id, rospy.Time(0))   
+            trans = self.tf_buf.lookup_transform(
+                self.FRAME_ID, ps.header.frame_id, rospy.Time(0)
+            )
             ps = do_transform_point(ps, trans)
 
             objpose = ObjectPose()
@@ -170,17 +178,15 @@ class object_pose:
         ## Publish
 
         if objects:
-
             objectpose_array = StampedObjectPoseArray()
             objectpose_array.header = object_array.header
-            objectpose_array.header.frame_id = self.FRAME_ID # we transformed earlier
+            objectpose_array.header.frame_id = self.FRAME_ID  # we transformed earlier
             objectpose_array.objects = objects
 
             self.pub_objectposes.publish(objectpose_array)
             self.publish_markers(objectpose_array)
 
     def publish_markers(self, msg: StampedObjectPoseArray):
-
         # Don't send a new marker if there aren't anything to show
         if not msg.objects:
             return
@@ -189,22 +195,20 @@ class object_pose:
         marker.header.frame_id = self.FRAME_ID
         marker.header.stamp = msg.header.stamp
         marker.type = Marker.SPHERE_LIST
-        marker.action = 0 
+        marker.action = 0
         marker.pose.orientation.w = 1
         marker.scale = Vector3(0.2, 0.2, 0.2)
         marker.color = ColorRGBA(0, 1, 0, 1)
         marker.lifetime = rospy.Duration(0.5)
 
         for objpose in msg.objects:
-            if objpose.object.label == 'person':
+            if objpose.object.label == "person":
                 marker.points.append(objpose.pose.pose.position)
 
         self.pub_objectmarkers.publish(marker)
 
 
-if __name__ == '__main__':
-
+if __name__ == "__main__":
     ##  Start node  ##
 
     object_pose().run()
-

@@ -17,17 +17,18 @@ def load_param(name, value=None):
         assert rospy.has_param(name), f'Missing parameter "{name}"'
     return rospy.get_param(name, value)
 
+
 def replace_base(old, new):
     split_last = lambda xs: (xs[:-1], xs[-1])
-    is_private = new.startswith('~')
-    is_global = new.startswith('/')
+    is_private = new.startswith("~")
+    is_global = new.startswith("/")
     assert not (is_private or is_global)
-    ns, _ = split_last(old.split('/'))
-    ns += new.split('/')
-    return '/'.join(ns)
+    ns, _ = split_last(old.split("/"))
+    ns += new.split("/")
+    return "/".join(ns)
+
 
 def iou(box1, box2):
-
     u11, v11, u21, v21 = box1
     u12, v12, u22, v22 = box2
 
@@ -59,46 +60,44 @@ def iou(box1, box2):
 
 
 class object_detect:
-
     def __init__(self):
-
         ## Initialize node
 
-        rospy.init_node('object_detect')
+        rospy.init_node("object_detect")
 
         ## Parameters
 
-        self.ENABLE_BBOX_IMAGE = load_param('~enable_bbox_image', False)
+        self.ENABLE_BBOX_IMAGE = load_param("~enable_bbox_image", False)
 
-        self.SUB_IMAGE = load_param('~sub_image', 'image')
-        self.SUB_CAMERA_INFO = replace_base(self.SUB_IMAGE, 'camera_info')
-        
-        self.IMAGE_WIDTH = load_param('~image_width', 640)
-        self.IMAGE_HEIGHT = load_param('~image_width', 480)
+        self.SUB_IMAGE = load_param("~sub_image", "image")
+        self.SUB_CAMERA_INFO = replace_base(self.SUB_IMAGE, "camera_info")
 
-        self.PUB_BBOX_IMAGE = load_param('~pub_bbox_image', 'bbox_image')
-        self.PUB_CAMERA_INFO = replace_base(self.PUB_BBOX_IMAGE, 'camera_info')
+        self.IMAGE_WIDTH = load_param("~image_width", 640)
+        self.IMAGE_HEIGHT = load_param("~image_width", 480)
 
-        self.USE_CUDA = load_param('~use_cuda', False)
-        self.MODEL_PATH = load_param('~model_path', 'yolov8n.pt')
+        self.PUB_BBOX_IMAGE = load_param("~pub_bbox_image", "bbox_image")
+        self.PUB_CAMERA_INFO = replace_base(self.PUB_BBOX_IMAGE, "camera_info")
+
+        self.USE_CUDA = load_param("~use_cuda", False)
+        self.MODEL_PATH = load_param("~model_path", "yolov8n.pt")
 
         # Space separated list, e.g. 'bed cup dog'
-        self.ONLY_OBJECTS = load_param('~only_objects', '').split()
-        self.SKIP_OBJECTS = load_param('~skip_objects', '').split()
+        self.ONLY_OBJECTS = load_param("~only_objects", "").split()
+        self.SKIP_OBJECTS = load_param("~skip_objects", "").split()
 
-        self.MAX_AGE = load_param('~max_age', 30)
+        self.MAX_AGE = load_param("~max_age", 30)
 
-        self.PUB_OBJECTS = load_param('~pub_objects', 'objects')
+        self.PUB_OBJECTS = load_param("~pub_objects", "objects")
 
         ## Neural Network
 
         self.model = YOLO(self.MODEL_PATH)
 
         if self.USE_CUDA:
-            rospy.loginfo('CUDA enabled')
-            self.model.to('cuda')
+            rospy.loginfo("CUDA enabled")
+            self.model.to("cuda")
         else:
-            rospy.loginfo('CUDA disabled')
+            rospy.loginfo("CUDA disabled")
 
         classes = {lbl: cls for cls, lbl in self.model.names.items()}
         self.label_to_class = lambda label: classes[label]
@@ -110,12 +109,15 @@ class object_detect:
 
         ## Publishers
 
-        self.pub_objects = rospy.Publisher(self.PUB_OBJECTS, StampedObjectArray, queue_size=10)
+        self.pub_objects = rospy.Publisher(
+            self.PUB_OBJECTS, StampedObjectArray, queue_size=10
+        )
         rospy.loginfo(self.PUB_OBJECTS)
 
         if self.ENABLE_BBOX_IMAGE:
-
-            self.pub_bbox_image = rospy.Publisher(self.PUB_BBOX_IMAGE, Image, queue_size=1)
+            self.pub_bbox_image = rospy.Publisher(
+                self.PUB_BBOX_IMAGE, Image, queue_size=1
+            )
             rospy.loginfo(self.PUB_BBOX_IMAGE)
 
         ## Subscribers
@@ -133,22 +135,23 @@ class object_detect:
         rospy.spin()
 
     def callback(self, image):
-
         ## Detect objects
 
-        frame = np.frombuffer(image.data, dtype=np.uint8).reshape(image.height, image.width, -1)
+        frame = np.frombuffer(image.data, dtype=np.uint8).reshape(
+            image.height, image.width, -1
+        )
         frame = cv2.resize(frame, (self.IMAGE_WIDTH, self.IMAGE_HEIGHT))
         frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2RGB)
 
         if self.ONLY_OBJECTS:
-            result = self.model.predict(frame,
-                                        conf=0.5,
-                                        verbose=False,
-                                        classes=list(map(self.label_to_class, self.ONLY_OBJECTS)))[0]
+            result = self.model.predict(
+                frame,
+                conf=0.5,
+                verbose=False,
+                classes=list(map(self.label_to_class, self.ONLY_OBJECTS)),
+            )[0]
         else:
-            result = self.model.predict(frame,
-                                        conf=0.5,
-                                        verbose=False)[0]
+            result = self.model.predict(frame, conf=0.5, verbose=False)[0]
 
         result = result.cpu().numpy()
         boxes = result.boxes.xyxy
@@ -162,14 +165,14 @@ class object_detect:
         ## Create object messages
 
         objects = []
-        for box, c, p  in zip(boxes, cls, conf):
+        for box, c, p in zip(boxes, cls, conf):
             u1, v1, u2, v2 = box
 
-            # get the label name 
+            # get the label name
             label = result.names[c]
 
             if self.SKIP_OBJECTS and label in self.SKIP_OBJECTS:
-                continue 
+                continue
 
             if self.ONLY_OBJECTS and label not in self.ONLY_OBJECTS:
                 continue
@@ -180,7 +183,6 @@ class object_detect:
 
             # do not continue if box has no size
             if u1 != u2 and v1 != v2:
-
                 # pick best matched tracked object
                 trk = [0, 0, 0, 0, 0]
                 trk_iou = 0
@@ -223,16 +225,14 @@ class object_detect:
             new_image.header = image.header
             new_image.height = frame.shape[0]
             new_image.width = frame.shape[1]
-            new_image.encoding = 'rgb8'
+            new_image.encoding = "rgb8"
             new_image.step = frame.size // new_image.height
             new_image.data = frame.tobytes()
 
             self.pub_bbox_image.publish(new_image)
 
 
-if __name__ == '__main__':
-
+if __name__ == "__main__":
     ##  Start node  ##
 
     object_detect().run()
-
