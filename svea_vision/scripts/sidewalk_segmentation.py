@@ -192,8 +192,13 @@ class SidewalkSegementation:
         self.log_times['extract_pc_time'] = time.time()
         
         # Transform pointcloud to frame_id
-        sidewalk_pc_msg = do_transform_cloud(extracted_pc_msg, self.tf_buf.lookup_transform(self.frame_id, extracted_pc_msg.header.frame_id, extracted_pc_msg.header.stamp))
-
+        try:
+            transform_stamped = self.tf_buf.lookup_transform(self.frame_id, extracted_pc_msg.header.frame_id, extracted_pc_msg.header.stamp)
+        except:
+            rospy.logwarn("{}: Transform lookup failed, using latest transform instead".format(rospy.get_name()))
+            transform_stamped = self.tf_buf.lookup_transform(self.frame_id, extracted_pc_msg.header.frame_id, rospy.Time(0))
+        sidewalk_pc_msg = do_transform_cloud(extracted_pc_msg, transform_stamped)
+        
         # Publish mask
         mask_msg = self.cv_bridge.cv2_to_imgmsg(sidewalk_mask, encoding='mono8')
         self.sidewalk_mask_pub.publish(mask_msg)
