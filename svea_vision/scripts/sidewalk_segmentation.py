@@ -5,7 +5,7 @@ import rospkg
 import tf2_ros
 import message_filters as mf
 from cv_bridge import CvBridge
-from tf2_geometry_msgs import do_transform_cloud
+from tf2_sensor_msgs.tf2_sensor_msgs import do_transform_cloud
 from sensor_msgs.msg import Image, PointCloud2
 
 import os
@@ -192,7 +192,7 @@ class SidewalkSegementation:
         self.log_times['extract_pc_time'] = time.time()
         
         # Transform pointcloud to frame_id
-        sidewalk_pc_msg = do_transform_cloud(extracted_pc_msg, self.tf_buf.lookup_transform(self.frame_id, extracted_pc_msg.header.frame_id, rospy.Time(0)))
+        sidewalk_pc_msg = do_transform_cloud(extracted_pc_msg, self.tf_buf.lookup_transform(self.frame_id, extracted_pc_msg.header.frame_id, extracted_pc_msg.header.stamp))
 
         # Publish mask
         mask_msg = self.cv_bridge.cv2_to_imgmsg(sidewalk_mask, encoding='mono8')
