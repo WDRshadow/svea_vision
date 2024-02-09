@@ -65,7 +65,7 @@ class SidewalkSegementation:
             self.prompt_text = load_param('~text_prompt_text', 'a sidewalk or footpath or walkway or paved path for humans to walk on')
             
             # Other parameters
-            self.frame_id = load_param('~frame_id', 'map')
+            self.frame_id = load_param('~frame_id', '')
             self.publish_ann = load_param('~publish_ann', False)
             self.verbose = load_param('~verbose', False)
             
@@ -191,14 +191,17 @@ class SidewalkSegementation:
         extracted_pc_msg = self.extract_pointcloud(pc_msg, sidewalk_mask)
         self.log_times['extract_pc_time'] = time.time()
         
-        # Transform pointcloud to frame_id
-        try:
-            transform_stamped = self.tf_buf.lookup_transform(self.frame_id, extracted_pc_msg.header.frame_id, extracted_pc_msg.header.stamp)
-        except tf2_ros.LookupException:
-            rospy.logwarn("{}: Transform lookup from {} to {} failed for the requested time. Using latest transform instead.".format(
-                rospy.get_name(), extracted_pc_msg.header.frame_id, self.frame_id))
-            transform_stamped = self.tf_buf.lookup_transform(self.frame_id, extracted_pc_msg.header.frame_id, rospy.Time(0))
-        sidewalk_pc_msg = do_transform_cloud(extracted_pc_msg, transform_stamped)
+        # Transform pointcloud to frame_id if specified
+        if self.frame_id == '':
+            sidewalk_pc_msg = extracted_pc_msg
+        else:
+            try:
+                transform_stamped = self.tf_buf.lookup_transform(self.frame_id, extracted_pc_msg.header.frame_id, extracted_pc_msg.header.stamp)
+            except tf2_ros.LookupException:
+                rospy.logwarn("{}: Transform lookup from {} to {} failed for the requested time. Using latest transform instead.".format(
+                    rospy.get_name(), extracted_pc_msg.header.frame_id, self.frame_id))
+                transform_stamped = self.tf_buf.lookup_transform(self.frame_id, extracted_pc_msg.header.frame_id, rospy.Time(0))
+            sidewalk_pc_msg = do_transform_cloud(extracted_pc_msg, transform_stamped)
         
         # Publish mask
         mask_msg = self.cv_bridge.cv2_to_imgmsg(sidewalk_mask, encoding='mono8')
