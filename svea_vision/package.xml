@@ -55,6 +55,7 @@
   <depend>aruco_msgs</depend>
   <depend>cv_bridge</depend>
   <depend>ros_numpy</depend>
+  <depend>tf2_sensor_msgs</depend>
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>
