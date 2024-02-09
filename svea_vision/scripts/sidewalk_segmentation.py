@@ -192,9 +192,9 @@ class SidewalkSegementation:
         self.log_times['extract_pc_time'] = time.time()
         
         # Transform pointcloud to frame_id if specified
-        if self.frame_id == '':
+        if self.frame_id == '' or self.frame_id == extracted_pc_msg.header.frame_id:
             sidewalk_pc_msg = extracted_pc_msg
-        else:
+        else:        
             try:
                 transform_stamped = self.tf_buf.lookup_transform(self.frame_id, extracted_pc_msg.header.frame_id, extracted_pc_msg.header.stamp)
             except tf2_ros.LookupException:
