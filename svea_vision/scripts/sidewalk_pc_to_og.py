@@ -120,20 +120,11 @@ class SidewalkPointCloudToOccupancyGrid:
             x, y, z = point
             i, j = self.world_to_grid(x, y)
             
-            if self.sidewalk_z_min <= z < self.sidewalk_z_max:
-                occupancy_grid[i, j] = max(occupancy_grid[i, j], self.free_value)
-            elif self.obstacle_z_min <= z < self.obstacle_z_max:
-                occupancy_grid[i, j] = max(occupancy_grid[i, j], self.occupied_value)
-        
-        # Fill occupancy grid
-        for point in pointcloud_data:
-            x, y, z = point
-            i, j = self.world_to_grid(x, y)
-            
-            if self.sidewalk_z_min <= z < self.sidewalk_z_max:
-                occupancy_grid[i, j] = max(occupancy_grid[i, j], self.free_value)
-            elif self.obstacle_z_min <= z < self.obstacle_z_max:
-                occupancy_grid[i, j] = max(occupancy_grid[i, j], self.occupied_value)
+            if self.is_in_grid(i, j):
+                if self.sidewalk_z_min <= z < self.sidewalk_z_max:
+                    occupancy_grid[i, j] = max(occupancy_grid[i, j], self.free_value)
+                elif self.obstacle_z_min <= z < self.obstacle_z_max:
+                    occupancy_grid[i, j] = max(occupancy_grid[i, j], self.occupied_value)
                 
         # Flatten column-major order (Fortran-style) to match ROS OccupancyGrid
         return occupancy_grid.flatten(order='F').tolist()   
@@ -144,6 +135,10 @@ class SidewalkPointCloudToOccupancyGrid:
         j = int((y - self.sidewalk_occupancy_grid.info.origin.position.y) / self.sidewalk_occupancy_grid.info.resolution)
         
         return i, j
+    
+    def is_in_grid(self, i, j):
+        # Check if grid cell is within bounds
+        return 0 <= i < self.sidewalk_occupancy_grid.info.width and 0 <= j < self.sidewalk_occupancy_grid.info.height
     
     
 if __name__ == '__main__':
