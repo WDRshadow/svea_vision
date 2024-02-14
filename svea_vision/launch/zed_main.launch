@@ -10,6 +10,15 @@
     <arg name="publish_ann"         default="true"/>
     <arg name="verbose"             default="false"/>
 
+    <!-- Camera pose -->
+    <arg name="zed_base_frame"      default="base_link"/>
+    <arg name="zed_cam_pos_x"       default="0.0"/>
+    <arg name="zed_cam_pos_y"       default="0.0"/>
+    <arg name="zed_cam_pos_z"       default="0.0"/>
+    <arg name="zed_cam_roll"        default="0.0"/>
+    <arg name="zed_cam_pitch"       default="0.0"/>
+    <arg name="zed_cam_yaw"         default="0.0"/>
+
     <!-- Auxiliary -->
     <arg name="only_objects"        default=""/>
     <arg name="skip_objects"        default=""/>
@@ -27,6 +36,13 @@
     <!-- Nodes -->
     <include file="$(find zed_wrapper)/launch/zed.launch">
         <arg name="camera_name" value="zed"/>
+        <arg name="base_frame"  value="$(arg zed_base_frame)"/>
+        <arg name="cam_pos_x"   value="$(arg zed_cam_pos_x)"/>
+        <arg name="cam_pos_y"   value="$(arg zed_cam_pos_y)"/>
+        <arg name="cam_pos_z"   value="$(arg zed_cam_pos_z)"/>
+        <arg name="cam_roll"    value="$(arg zed_cam_roll)"/>
+        <arg name="cam_pitch"   value="$(arg zed_cam_pitch)"/>
+        <arg name="cam_yaw"     value="$(arg zed_cam_yaw)"/>
     </include>
 
     <include file="$(find svea_vision)/launch/object_pose.launch">
