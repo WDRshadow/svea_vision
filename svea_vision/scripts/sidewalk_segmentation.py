@@ -65,6 +65,7 @@ class SidewalkSegementation:
             self.prompt_text = load_param('~text_prompt_text', 'a sidewalk or footpath or walkway or paved path for humans to walk on')
             
             # Other parameters
+            self.mean_brightness = load_param('~mean_brightness', 0.75)
             self.frame_id = load_param('~frame_id', '')
             self.publish_ann = load_param('~publish_ann', False)
             self.verbose = load_param('~verbose', False)
@@ -120,9 +121,25 @@ class SidewalkSegementation:
         except rospy.ROSInterruptException:
             rospy.loginfo('Shutting down {}'.format(rospy.get_name()))
             
+    def adjust_mean_brightness(self, image, mean_brightness) -> np.ndarray:
+        # Convert image to HSV
+        hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+        
+        # Calculate mean brightness
+        mean_brightness_img = np.mean(hsv[:,:,2]/255)
+        
+        # Adjust brightness
+        hsv[:,:,2] = np.clip(hsv[:,:,2] * (mean_brightness/mean_brightness_img), 0, 255)
+
+        # Convert back to RGB
+        return cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)        
+            
     def segment_image(self, img_msg) -> (np.ndarray, Results):
         # Convert ROS image to OpenCV image
         image = self.cv_bridge.imgmsg_to_cv2(img_msg, desired_encoding='rgb8')
+        
+        # Adjust mean brightness
+        image = self.adjust_mean_brightness(image, self.mean_brightness)
         
         # Run inference on the image
         everything_results = self.model(image, device=self.device, imgsz=img_msg.width,
