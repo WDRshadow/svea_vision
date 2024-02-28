@@ -9,6 +9,7 @@
     <arg name="enable_sidewalk_segmentation"    default="false"/>
     <arg name="frame_id"                        default="map"/>
     <arg name="sidewalk_frame_id"               default=""/>
+    <arg name="sidewalk_mean_brightness"        default="0.75"/>
     <arg name="prompt_type"                     default="bbox"/>
     <arg name="publish_ann"                     default="true"/>
     <arg name="verbose"                         default="false"/>
@@ -80,6 +81,7 @@
         <arg name="prompt_type"                 value="$(arg prompt_type)"/>
         <arg name="publish_ann"                 value="$(arg publish_ann)"/>
         <arg name="frame_id"                    value="$(arg sidewalk_frame_id)"/>
+        <arg name="mean_brightness"             value="$(arg sidewalk_mean_brightness)"/>
         <arg name="verbose"                     value="$(arg verbose)"/>
         <!-- Consumed topics -->
         <arg name="rgb_topic"                   value="$(arg image)"/>
