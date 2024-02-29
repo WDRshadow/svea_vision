@@ -12,6 +12,7 @@ import os
 import time
 import cv2
 import torch
+import PIL
 import numpy as np
 
 from nanosam.utils.predictor import Predictor
@@ -51,12 +52,12 @@ class SidewalkSegementation:
             self.sidewalk_ann_topic = load_param('~sidewalk_ann_topic', 'sidewalk_ann')
             
             # Model parameters
-            self.image_encoder = load_param('~image_encoder', 'data/resnet18_image_encoder.engine')
-            self.mask_decoder = load_param('~mask_decoder', 'data/mobile_sam_mask_decoder.engine')
+            self.image_encoder = load_param('~image_encoder', '/opt/nanosam/data/resnet18_image_encoder.engine')
+            self.mask_decoder = load_param('~mask_decoder', '/opt/nanosam/data/mobile_sam_mask_decoder.engine')
             
             # Prompt parameters
             self.prompt_type = load_param('~prompt_type', 'bbox') # bbox or points or text
-            self.prompt_bbox = load_param('~bbox_prompt_corners', [0.40, 0.60, 0.60, 0.90]) # [x1, y1, x2, y2] in relative coordinates
+            self.prompt_bbox = load_param('~bbox_prompt_corners', [0.30, 0.50, 0.70, 0.90]) # [x1, y1, x2, y2] in relative coordinates
             self.prompt_points = load_param('~points_prompt_points', [[0.50, 0.95]]) # [[x1, y1], [x2, y2], ...] in relative coordinates
             self.prompt_text = load_param('~text_prompt_text', 'a sidewalk or footpath or walkway or paved path for humans to walk on')
             
@@ -110,7 +111,7 @@ class SidewalkSegementation:
 
         else:
             # Log status
-            rospy.loginfo('{} node initialized with model: {}'.format(rospy.get_name(), self.model_name))
+            rospy.loginfo('{} node initialized with model: {}'.format(rospy.get_name(), "NanoSAM"))
             
     def run(self) -> None:
         try:
@@ -159,10 +160,20 @@ class SidewalkSegementation:
         #     sidewalk_results = prompt_process.text_prompt(text=self.prompt_text)
         # else:
         #     rospy.logerr("Invalid value for prompt_type parameter")
-        bbox = [int(scale*dim) for scale, dim in zip(self.prompt_bbox, 2*[img_msg.width, img_msg.height])]
         
-        self.model.set_image(image)
-        sidewalk_mask, _, _ = self.model.predict(bbox, np.ones(len(bbox)))
+        self.model.set_image(PIL.Image.fromarray(image))
+
+        self.log_times['inference_time'] = time.time()
+
+        # Segment using bounding box
+        bbox = [int(scale*dim) for scale, dim in zip(self.prompt_bbox, 2*[img_msg.width, img_msg.height])]
+        points = np.array([
+            [bbox[0], bbox[1]],
+            [bbox[2], bbox[3]]
+        ])
+
+        point_labels = np.array([2,3])
+        sidewalk_mask, _, _ = self.model.predict(points, point_labels)
         sidewalk_mask = (sidewalk_mask[0, 0] > 0).detach().cpu().numpy()
 
         self.log_times['prompt_time'] = time.time()
