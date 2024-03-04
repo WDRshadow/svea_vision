@@ -15,7 +15,8 @@ import torch
 import PIL
 import numpy as np
 
-from nanosam.utils.predictor import Predictor
+from nanosam.utils.predictor import Predictor as NanoSAMPredictor
+from nanoowl.owl_predictor import OwlPredictor as NanoOwlPredictor
 
 np.float = float  # NOTE: Temporary fix for ros_numpy issue; check #39
 import ros_numpy
@@ -51,9 +52,13 @@ class SidewalkSegementation:
             self.sidewalk_pointcloud_topic = load_param('~sidewalk_pointcloud_topic', 'sidewalk_pointcloud')
             self.sidewalk_ann_topic = load_param('~sidewalk_ann_topic', 'sidewalk_ann')
             
-            # Model parameters
-            self.image_encoder = load_param('~image_encoder', '/opt/nanosam/data/resnet18_image_encoder.engine')
-            self.mask_decoder = load_param('~mask_decoder', '/opt/nanosam/data/mobile_sam_mask_decoder.engine')
+            # SAM Model parameters
+            self.sam_image_encoder = load_param('~sam_image_encoder', '/opt/nanosam/data/resnet18_image_encoder.engine')
+            self.sam_mask_decoder = load_param('~sam_mask_decoder', '/opt/nanosam/data/mobile_sam_mask_decoder.engine')
+            
+            # OWL Model parameters
+            self.owl_model = load_param('~owl_model', 'google/owlvit-base-patch32')
+            self.owl_image_encoder = load_param('~owl_image_encoder', '/opt/nanosam/data/owl_image_encoder_patch32.engine')
             
             # Prompt parameters
             self.prompt_type = load_param('~prompt_type', 'bbox') # bbox or points or text
@@ -80,7 +85,11 @@ class SidewalkSegementation:
             #     rospy.loginfo('{}: CUDA enabled'.format(rospy.get_name()))
             # else:
             #     rospy.loginfo('{}: CUDA disabled'.format(rospy.get_name()))
-            self.model = Predictor(self.image_encoder, self.mask_decoder)
+            
+            self.sam_model = NanoSAMPredictor(self.sam_image_encoder, self.sam_mask_decoder)
+            self.owl_model = NanoOwlPredictor(self.owl_model, image_encoder_engine=self.owl_image_encoder)
+            
+            self.prompt_text_encodings = self.owl_model.encode_text(self.prompt_text)
             
             # CV Bridge
             self.cv_bridge = CvBridge()
@@ -161,19 +170,30 @@ class SidewalkSegementation:
         # else:
         #     rospy.logerr("Invalid value for prompt_type parameter")
         
-        self.model.set_image(PIL.Image.fromarray(image))
+        self.sam_model.set_image(PIL.Image.fromarray(image))
 
         self.log_times['inference_time'] = time.time()
 
         # Segment using bounding box
         bbox = [int(scale*dim) for scale, dim in zip(self.prompt_bbox, 2*[img_msg.width, img_msg.height])]
+        
+        # Segment using text
+        owl_output = self.owl_model.predict(
+            image=image, 
+            text=self.prompt_text, 
+            text_encodings=self.prompt_text_encodings, 
+            pad_square=False
+        )
+        n_detections = len(owl_output.boxes)
+        if n_detections > 0:
+            bbox = [int(x) for x in owl_output.boxes[0]]
+
         points = np.array([
             [bbox[0], bbox[1]],
             [bbox[2], bbox[3]]
         ])
-
         point_labels = np.array([2,3])
-        sidewalk_mask, _, _ = self.model.predict(points, point_labels)
+        sidewalk_mask, _, _ = self.sam_model.predict(points, point_labels)
         sidewalk_mask = (sidewalk_mask[0, 0] > 0).detach().cpu().numpy()
 
         self.log_times['prompt_time'] = time.time()
