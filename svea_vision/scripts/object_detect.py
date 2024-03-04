@@ -73,7 +73,7 @@ class object_detect:
         self.SUB_CAMERA_INFO = replace_base(self.SUB_IMAGE, "camera_info")
 
         self.IMAGE_WIDTH = load_param("~image_width", 640)
-        self.IMAGE_HEIGHT = load_param("~image_width", 480)
+        self.IMAGE_HEIGHT = load_param("~image_height", 480)
 
         self.PUB_BBOX_IMAGE = load_param("~pub_bbox_image", "bbox_image")
         self.PUB_CAMERA_INFO = replace_base(self.PUB_BBOX_IMAGE, "camera_info")
