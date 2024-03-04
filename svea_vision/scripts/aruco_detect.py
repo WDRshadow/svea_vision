@@ -19,34 +19,33 @@ def load_param(name, value=None):
         assert rospy.has_param(name), f'Missing parameter "{name}"'
     return rospy.get_param(name, value)
 
+
 def replace_base(old, new):
     split_last = lambda xs: (xs[:-1], xs[-1])
-    is_private = new.startswith('~')
-    is_global = new.startswith('/')
+    is_private = new.startswith("~")
+    is_global = new.startswith("/")
     assert not (is_private or is_global)
-    ns, _ = split_last(old.split('/'))
-    ns += new.split('/')
-    return '/'.join(ns)
+    ns, _ = split_last(old.split("/"))
+    ns += new.split("/")
+    return "/".join(ns)
 
 
 class aruco_detect:
-
     def __init__(self):
-
         ## Initialize node
 
-        rospy.init_node('aruco_detect')
+        rospy.init_node("aruco_detect")
 
         ## Parameters
 
-        self.SUB_IMAGE = load_param('~sub_image')
-        self.SUB_CAMERA_INFO = replace_base(self.SUB_IMAGE, 'camera_info')
+        self.SUB_IMAGE = load_param("~sub_image")
+        self.SUB_CAMERA_INFO = replace_base(self.SUB_IMAGE, "camera_info")
 
-        self.ARUCO_DICT_NAME = load_param('~aruco_dict', 'DICT_4X4_250')
-        self.ARUCO_SIZE = load_param('~aruco_size', '0.05')
-        self.ARUCO_TF_NAME = load_param('~aruco_tf_name', 'aruco')
+        self.ARUCO_DICT_NAME = load_param("~aruco_dict", "DICT_4X4_250")
+        self.ARUCO_SIZE = load_param("~aruco_size", "0.05")
+        self.ARUCO_TF_NAME = load_param("~aruco_tf_name", "aruco")
 
-        self.PUB_ARUCO_POSE = load_param('~pub_aruco_pose', 'aruco_pose')
+        self.PUB_ARUCO_POSE = load_param("~pub_aruco_pose", "aruco_pose")
 
         ## Aruco
 
@@ -66,10 +65,13 @@ class aruco_detect:
 
         ## Subscribers
 
-        ts = mf.TimeSynchronizer([
-            mf.Subscriber(self.SUB_IMAGE, Image),
-            mf.Subscriber(self.SUB_CAMERA_INFO, CameraInfo),
-        ], queue_size=1)
+        ts = mf.TimeSynchronizer(
+            [
+                mf.Subscriber(self.SUB_IMAGE, Image),
+                mf.Subscriber(self.SUB_CAMERA_INFO, CameraInfo),
+            ],
+            queue_size=1,
+        )
         ts.registerCallback(self.callback)
         rospy.loginfo(self.SUB_IMAGE)
 
@@ -77,9 +79,8 @@ class aruco_detect:
         rospy.spin()
 
     def callback(self, image, camera_info):
-
         # convert to grayscale
-        gray = bridge.imgmsg_to_cv2(image, 'mono8')
+        gray = bridge.imgmsg_to_cv2(image, "mono8")
 
         corners, ids, _ = aruco.detectMarkers(gray, self.aruco_dict)
 
@@ -89,12 +90,13 @@ class aruco_detect:
         rvecs, tvecs = aruco.estimatePoseSingleMarkers(
             corners,
             self.aruco_size,
-            np.array(camera_info.K).reshape((3, 3)),          # camera matrix
-            np.array(camera_info.D).reshape((1, 5)),          # camera distortion
-        )[:2] # [:2] due to python2/python3 compatibility
+            np.array(camera_info.K).reshape((3, 3)),  # camera matrix
+            np.array(camera_info.D).reshape((1, 5)),  # camera distortion
+        )[
+            :2
+        ]  # [:2] due to python2/python3 compatibility
 
         for aruco_id, rvec, tvec in zip(ids, rvecs, tvecs):
-
             mtx = np.zeros((4, 4))
             mtx[:3, :3] = cv2.Rodrigues(rvec)[0]
             mtx[:3, 3] = tvec
@@ -119,12 +121,12 @@ class aruco_detect:
             marker.id = int(aruco_id)
             marker.pose.pose.position = Point(*translation)
             marker.pose.pose.orientation = Quaternion(*rotation)
-            marker.confidence = 1 # NOTE: Set this to something more relevant?
+            marker.confidence = 1  # NOTE: Set this to something more relevant?
 
             self.pub_aruco_pose.publish(marker)
 
-if __name__ == '__main__':
 
+if __name__ == "__main__":
     ##  Global resources  ##
 
     bridge = CvBridge()
@@ -132,4 +134,3 @@ if __name__ == '__main__':
     ##  Start node  ##
 
     aruco_detect().run()
-
