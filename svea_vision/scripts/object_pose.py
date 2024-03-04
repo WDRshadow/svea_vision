@@ -58,6 +58,13 @@ class object_pose:
         self.tf_buf = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buf)
 
+        # rospy.loginfo('Waiting for transform to target_frame "%s"', self.FRAME_ID)
+        # while not self.tf_buf.can_transform(self.FRAME_ID, "zed_left_camera_optical_frame", rospy.Time(0)):
+        #     if rospy.is_shutdown():
+        #         return
+        # rospy.loginfo('Found transform to target_frame "%s"', self.FRAME_ID)
+
+
         ## Publishers
 
         self.pub_objectposes = rospy.Publisher(
@@ -161,9 +168,10 @@ class object_pose:
             ps.point.z = z
 
             # Create point in map frame
-            trans = self.tf_buf.lookup_transform(
-                self.FRAME_ID, ps.header.frame_id, rospy.Time(0)
-            )
+            if not self.tf_buf.can_transform(self.FRAME_ID, ps.header.frame_id, rospy.Time(0)):
+                rospy.loginfo('Cannot do transform for objects from "%s" to target_frame "%s"', ps.header.frame_id, self.FRAME_ID)
+                return
+            trans = self.tf_buf.lookup_transform(self.FRAME_ID, ps.header.frame_id, rospy.Time(0))
             ps = do_transform_point(ps, trans)
 
             objpose = ObjectPose()
