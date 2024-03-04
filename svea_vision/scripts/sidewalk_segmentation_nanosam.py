@@ -58,7 +58,7 @@ class SidewalkSegementation:
             
             # OWL Model parameters
             self.owl_model = load_param('~owl_model', 'google/owlvit-base-patch32')
-            self.owl_image_encoder = load_param('~owl_image_encoder', '/opt/nanosam/data/owl_image_encoder_patch32.engine')
+            self.owl_image_encoder = load_param('~owl_image_encoder', '/opt/nanoowl/data/owl_image_encoder_patch32.engine')
             
             # Prompt parameters
             self.prompt_type = load_param('~prompt_type', 'bbox') # bbox or points or text
@@ -179,7 +179,7 @@ class SidewalkSegementation:
         
         # Segment using text
         owl_output = self.owl_model.predict(
-            image=image, 
+            image=PIL.Image.fromarray(image), 
             text=self.prompt_text, 
             text_encodings=self.prompt_text_encodings, 
             pad_square=False
