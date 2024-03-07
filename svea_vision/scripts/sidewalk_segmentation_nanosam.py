@@ -12,7 +12,7 @@ import os
 import time
 import cv2
 import torch
-import PIL
+import PIL.Image
 import numpy as np
 
 from nanosam.utils.predictor import Predictor as NanoSAMPredictor
@@ -72,23 +72,11 @@ class SidewalkSegementation:
             self.publish_ann = load_param('~publish_ann', False)
             self.verbose = load_param('~verbose', False)
             
-            # Get package path
-            # rospack = rospkg.RosPack()
-            # package_path = rospack.get_path('svea_vision')
-            
-            # Load model
-            # self.device = 'cuda' if self.use_cuda else 'cpu'
-            # self.model_path = os.path.join(package_path, 'models', self.model_name)
-            # self.model = FastSAM(self.model_path)
-            # if self.use_cuda:
-            #     self.model.to('cuda')
-            #     rospy.loginfo('{}: CUDA enabled'.format(rospy.get_name()))
-            # else:
-            #     rospy.loginfo('{}: CUDA disabled'.format(rospy.get_name()))
-            
+            # Load models            
             self.sam_model = NanoSAMPredictor(self.sam_image_encoder, self.sam_mask_decoder)
             self.owl_model = NanoOwlPredictor(self.owl_model, image_encoder_engine=self.owl_image_encoder)
-            
+        
+            # Prompt text encoding
             self.prompt_text_encodings = self.owl_model.encode_text(self.prompt_text)
             
             # CV Bridge
@@ -120,7 +108,7 @@ class SidewalkSegementation:
 
         else:
             # Log status
-            rospy.loginfo('{} node initialized with model: {}'.format(rospy.get_name(), "NanoSAM"))
+            rospy.loginfo('{} node initialized with NanoSAM and NanoOWL models'.format(rospy.get_name()))
             
     def run(self) -> None:
         try:
@@ -143,56 +131,50 @@ class SidewalkSegementation:
             
     def segment_image(self, img_msg) -> (np.ndarray):
         # Convert ROS image to OpenCV image
-        image = self.cv_bridge.imgmsg_to_cv2(img_msg, desired_encoding='rgb8')
+        self.image = self.cv_bridge.imgmsg_to_cv2(img_msg, desired_encoding='rgb8')
         
         # Adjust mean brightness
-        image = self.adjust_mean_brightness(image, self.mean_brightness)
+        self.image = self.adjust_mean_brightness(self.image, self.mean_brightness)
         
-        # Run inference on the image
-        # everything_results = self.model(image, device=self.device, imgsz=img_msg.width,
-        #                                 conf=self.conf, iou=self.iou, retina_masks=True, verbose=self.verbose)
-        # self.log_times['inference_time'] = time.time()
+        # Set image for SAM model
+        image_pil = PIL.Image.fromarray(self.image)
+        self.sam_model.set_image(image_pil)
         
-        # # Prepare a Prompt Process object
-        # prompt_process = FastSAMPrompt(image, everything_results, device=self.device)
-        
-        # # Prompt the results
-        # if self.prompt_type == 'bbox':
-        #     # Convert bbox from relative to absolute
-        #     bbox = [int(scale*dim) for scale, dim in zip(self.prompt_bbox, 2*[img_msg.width, img_msg.height])]
-        #     sidewalk_results = prompt_process.box_prompt(bbox)
-        # elif self.prompt_type == 'points':
-        #     # Convert points from relative to absolute
-        #     points=[[int(scale*dim) for scale, dim in zip(point, [img_msg.width, img_msg.height])] for point in self.prompt_points]
-        #     sidewalk_results = prompt_process.point_prompt(points, pointlabel=[1])
-        # elif self.prompt_type == 'text':
-        #     sidewalk_results = prompt_process.text_prompt(text=self.prompt_text)
-        # else:
-        #     rospy.logerr("Invalid value for prompt_type parameter")
-        
-        self.sam_model.set_image(PIL.Image.fromarray(image))
-
         self.log_times['inference_time'] = time.time()
 
-        # Segment using bounding box
-        bbox = [int(scale*dim) for scale, dim in zip(self.prompt_bbox, 2*[img_msg.width, img_msg.height])]
+        # Segment using prompt
+        if self.prompt_type == 'bbox':
+            self.bbox = [int(scale*dim) for scale, dim in zip(self.prompt_bbox, 2*[img_msg.width, img_msg.height])]
+        elif self.prompt_type == 'text':
+            # Use OWL model to predict the bounding box
+            owl_output = self.owl_model.predict(
+                image=image_pil,
+                text=self.prompt_text, 
+                text_encodings=self.prompt_text_encodings, 
+                pad_square=False
+            )
+            n_detections = len(owl_output.boxes)
+            if n_detections > 0:
+                self.bbox = [int(x) for x in owl_output.boxes[0]]
+            else:
+                self.bbox = [int(scale*dim) for scale, dim in zip(self.prompt_bbox, 2*[img_msg.width, img_msg.height])]
+                rospy.logwarn("No detections found for the prompt text. Using default bbox instead.")
         
-        # Segment using text
-        owl_output = self.owl_model.predict(
-            image=PIL.Image.fromarray(image), 
-            text=self.prompt_text, 
-            text_encodings=self.prompt_text_encodings, 
-            pad_square=False
-        )
-        n_detections = len(owl_output.boxes)
-        if n_detections > 0:
-            bbox = [int(x) for x in owl_output.boxes[0]]
-
-        points = np.array([
-            [bbox[0], bbox[1]],
-            [bbox[2], bbox[3]]
-        ])
-        point_labels = np.array([2,3])
+        # Create points and point_labels
+        if self.prompt_type == 'bbox' or self.prompt_type == 'text':
+            points = np.array([
+                [self.bbox[0], self.bbox[1]],
+                [self.bbox[2], self.bbox[3]]
+            ])
+            point_labels = np.array([2,3])
+        elif self.prompt_type == 'points':
+            # Convert points from relative to absolute
+            points = [[int(scale*dim) for scale, dim in zip(point, [img_msg.width, img_msg.height])] for point in self.prompt_points]
+            point_labels = np.array([1]*len(points))
+        else:
+            rospy.logerr("Invalid value for prompt_type parameter")
+            
+        # Segement using SAM model
         sidewalk_mask, _, _ = self.sam_model.predict(points, point_labels)
         sidewalk_mask = (sidewalk_mask[0, 0] > 0).detach().cpu().numpy()
 
@@ -262,16 +244,13 @@ class SidewalkSegementation:
         
         # Get annotated image and publish 
         if self.publish_ann:
-            # Convert ROS image to OpenCV image
-            image = self.cv_bridge.imgmsg_to_cv2(img_msg, desired_encoding='rgb8')
             # Create annotated image
             color = np.array([0,255,0], dtype='uint8')
-            masked_image = np.where(sidewalk_mask[...,None], color, image)
-            sidewalk_ann = cv2.addWeighted(image, 0.75, masked_image, 0.25, 0)
+            masked_image = np.where(sidewalk_mask[...,None], color, self.image)
+            sidewalk_ann = cv2.addWeighted(self.image, 0.75, masked_image, 0.25, 0)
             
-            if self.prompt_type=='bbox':
-                bbox = [int(scale*dim) for scale, dim in zip(self.prompt_bbox, 2*[img_msg.width, img_msg.height])]
-                cv2.rectangle(sidewalk_ann, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0,255,0), 2)        
+            if self.prompt_type=='bbox' or self.prompt_type=='text':
+                cv2.rectangle(sidewalk_ann, (self.bbox[0], self.bbox[1]), (self.bbox[2], self.bbox[3]), (0,255,0), 2)        
             ann_msg = self.cv_bridge.cv2_to_imgmsg(sidewalk_ann, encoding='rgb8')
             self.sidewalk_ann_pub.publish(ann_msg)
         
