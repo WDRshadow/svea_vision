@@ -65,7 +65,7 @@ class SidewalkSegementation:
             self.prompt_text = load_param('~text_prompt_text', 'a sidewalk or footpath or walkway or paved path for humans to walk on')
             
             # Other parameters
-            self.mean_brightness = load_param('~mean_brightness', 0.75)
+            self.mean_brightness = load_param('~mean_brightness', 0.5)
             self.frame_id = load_param('~frame_id', '')
             self.publish_ann = load_param('~publish_ann', False)
             self.verbose = load_param('~verbose', False)

@@ -9,7 +9,7 @@
     <arg name="iou"                 default="0.9"/>
     <arg name="prompt_type"         default="bbox"/>
     <arg name="publish_ann"         default="false"/>
-    <arg name="mean_brightness"     default="0.75"/>
+    <arg name="mean_brightness"     default="0.5"/>
     <arg name="frame_id"            default=""/>
     <arg name="verbose"             default="false"/>
 

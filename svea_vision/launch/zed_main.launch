@@ -9,7 +9,7 @@
     <arg name="enable_sidewalk_segmentation"    default="false"/>
     <arg name="frame_id"                        default="map"/>
     <arg name="sidewalk_frame_id"               default=""/>
-    <arg name="sidewalk_mean_brightness"        default="0.75"/>
+    <arg name="sidewalk_mean_brightness"        default="0.5"/>
     <arg name="prompt_type"                     default="bbox"/>
     <arg name="publish_ann"                     default="true"/>
     <arg name="verbose"                         default="false"/>
