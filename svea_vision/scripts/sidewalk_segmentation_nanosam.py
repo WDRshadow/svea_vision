@@ -67,7 +67,7 @@ class SidewalkSegementation:
             self.prompt_text = load_param('~text_prompt_text', 'a sidewalk or footpath or walkway or paved path for humans to walk on')
             
             # Other parameters
-            self.mean_brightness = load_param('~mean_brightness', 0.75)
+            self.mean_brightness = load_param('~mean_brightness', 0.5)
             self.frame_id = load_param('~frame_id', '')
             self.publish_ann = load_param('~publish_ann', False)
             self.verbose = load_param('~verbose', False)
@@ -77,6 +77,7 @@ class SidewalkSegementation:
             self.owl_model = NanoOwlPredictor(self.owl_model, image_encoder_engine=self.owl_image_encoder)
         
             # Prompt text encoding
+            self.prompt_text = [self.prompt_text]
             self.prompt_text_encodings = self.owl_model.encode_text(self.prompt_text)
             
             # CV Bridge
@@ -151,11 +152,14 @@ class SidewalkSegementation:
                 image=image_pil,
                 text=self.prompt_text, 
                 text_encodings=self.prompt_text_encodings, 
-                pad_square=False
+                pad_square=True,
+                threshold=[0.05]
             )
+            
             n_detections = len(owl_output.boxes)
             if n_detections > 0:
-                self.bbox = [int(x) for x in owl_output.boxes[0]]
+                max_score_index = owl_output.scores.argmax()
+                self.bbox = [int(x) for x in owl_output.boxes[max_score_index]]
             else:
                 self.bbox = [int(scale*dim) for scale, dim in zip(self.prompt_bbox, 2*[img_msg.width, img_msg.height])]
                 rospy.logwarn("No detections found for the prompt text. Using default bbox instead.")
@@ -189,9 +193,10 @@ class SidewalkSegementation:
         
         # Select the largest contour from the mask
         contours, _ = cv2.findContours(sidewalk_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        max_contour = max(contours, key=cv2.contourArea)
-        sidewalk_mask = np.zeros_like(sidewalk_mask)
-        cv2.fillPoly(sidewalk_mask, [max_contour], 255)
+        if len(contours) > 0:
+            max_contour = max(contours, key=cv2.contourArea)
+            sidewalk_mask = np.zeros_like(sidewalk_mask)
+            cv2.fillPoly(sidewalk_mask, [max_contour], 255)
         
         self.log_times['postprocess_time'] = time.time()
                     
@@ -245,7 +250,7 @@ class SidewalkSegementation:
         # Get annotated image and publish 
         if self.publish_ann:
             # Create annotated image
-            color = np.array([0,255,0], dtype='uint8')
+            color = np.array([0,0,255], dtype='uint8')
             masked_image = np.where(sidewalk_mask[...,None], color, self.image)
             sidewalk_ann = cv2.addWeighted(self.image, 0.75, masked_image, 0.25, 0)
             
