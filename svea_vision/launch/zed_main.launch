@@ -34,7 +34,7 @@
     <arg name="image"           value="/zed/zed_node/rgb/image_rect_color"/>
     <arg name="point_cloud"     value="/zed/zed_node/point_cloud/cloud_registered"/>
 
-    <arg name="map_path" default="$(find svea_core)/maps/sml.yaml"/>
+    <arg name="map_path" default=""/>
     <node if="$(eval map_path != '')" pkg="map_server" name="map_server" type="map_server" args="$(arg map_path)"/>
 
     <!-- Nodes -->
