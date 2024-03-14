@@ -65,6 +65,7 @@ class SidewalkSegementation:
             self.prompt_text = load_param('~text_prompt_text', 'a sidewalk or footpath or walkway or paved path for humans to walk on')
             
             # Other parameters
+            self.brightness_window = load_param('~brightness_window', 0.5)
             self.mean_brightness = load_param('~mean_brightness', 0.5)
             self.frame_id = load_param('~frame_id', '')
             self.publish_ann = load_param('~publish_ann', False)
@@ -125,9 +126,11 @@ class SidewalkSegementation:
         # Convert image to HSV
         hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
         
-        # Calculate mean brightness
-        mean_brightness_img = np.mean(hsv[:,:,2]/255)
-        
+        # Calculate mean brightness of the window
+        v_len = len(hsv[:,:,2].flatten())
+        v_max_window = np.sort(hsv[:,:,2].flatten())[-int(v_len*self.brightness_window):]
+        mean_brightness_img = np.mean(v_max_window/255.0)
+                
         # Adjust brightness
         hsv[:,:,2] = np.clip(hsv[:,:,2] * (mean_brightness/mean_brightness_img), 0, 255)
 
