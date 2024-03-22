@@ -1,7 +1,7 @@
 import rosbag
 import pandas as pd
 import os
-import rospy_message_converter as converter
+import rospy_message_converter.message_converter as converter
 
 CURRENT_FILE = './src/svea_vision/svea_vision/'
 file_paths = ["out_2024-03-04-19-08-30_one_person_moving", "out_2024-03-04-19-09-45_standing", 
@@ -39,7 +39,7 @@ def flatten_dict(d, parent_key='', sep='.'):
 
 
 def save_data(path):
-    create_dirs(path)
+    create_dirs([path])
 
     # The bag file should be in the same directory as your terminal
     bag = rosbag.Bag(path + '.bag')
