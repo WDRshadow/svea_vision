@@ -42,16 +42,17 @@ def save_data(results_path, data_path):
     # The bag file should be in the same directory as your terminal
     bag = rosbag.Bag(data_path + '.bag')
     topics = ['/objectposes', '/person_state_estimation/person_states', '/qualisys/pedestrian/pose', '/qualisys/pedestrian/velocity', '/qualisys/tinman/pose', '/qualisys/tinman/velocity']
-    
+    create_dir(results_path)
+
     for topic, msg, t in bag.read_messages(topics=topics):
-        create_dir(results_path + '/' + topic.replace('/', '_'))
         d = converter.convert_ros_message_to_dictionary(msg)
         print(d)
         print(topic)
         print('\n')
 
-        dataset = pd.DataFrame([flatten_dict(d)])        
-        dataset.to_csv(results_path + topic + '.csv', columns=dataset.keys())
+        dataset = pd.DataFrame([flatten_dict(d)])    
+        data_file_path = results_path + topic.replace('/', '_') + '.csv'    
+        dataset.to_csv(data_file_path, columns=dataset.keys())
 
 
 if __name__ == "__main__":
