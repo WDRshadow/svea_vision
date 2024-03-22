@@ -51,7 +51,7 @@ def save_data(path):
         print(topic)
         print('\n')
 
-        dataset = pd.DataFrame(flatten_dict(d))        
+        dataset = pd.DataFrame([flatten_dict(d)])        
         dataset.to_csv(path + topic + '.csv', columns=dataset.keys())
 
 
