@@ -121,7 +121,7 @@ class object_detect:
 
         ## Subscribers
 
-        rospy.Subscriber(self.SUB_IMAGE, Image, self.callback)
+        rospy.Subscriber(self.SUB_IMAGE, Image, self.callback, queue_size=1, buff_size=2**24)
         rospy.loginfo(self.SUB_IMAGE)
 
         ## Relay (sub->pub) camera info

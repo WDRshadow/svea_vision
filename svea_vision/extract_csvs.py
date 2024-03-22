@@ -1,113 +1,81 @@
 import rosbag
 import pandas as pd
 import os
-import rospy_message_converter as converter
+import rospy_message_converter.message_converter as converter
 
-CURRENT_FILE = './src/svea_vision/svea_vision/'
+CURRENT_FILE = os.getcwd()
 file_paths = ["out_2024-03-04-19-08-30_one_person_moving", "out_2024-03-04-19-09-45_standing", 
               "out_2024-03-04-19-10-28_two_people_moving", "out_2024-03-04-19-11-38_one_person_standing_one_moving", 
               "out_2024-03-04-19-13-21"]
 
 
-def create_dirs(dirs):
+def create_dir(dir):
     """
     Input:
-        dirs: a list of directories to create, in case these directories are not found
+        dir: a directory to create, in case these directories are not found
     Returns:
         exit_code: 0 if success, -1 if failure
     """
     try:
-        for dir_ in dirs:
-            if not os.path.exists(dir_):
-                os.makedirs(dir_)
+        if not os.path.exists(dir):
+            os.makedirs(dir)
         return 0
     except Exception as err:
         print("Creating directories error: {0}".format(err))
         exit(-1)
 
-def save_data(path):
-    create_dirs(path)
+
+# Function to flatten the dictionary
+def flatten_dict(d, parent_key='', sep='.'):
+    items = []
+    for k, v in d.items():
+        new_key = f"{parent_key}{sep}{k}" if parent_key else k
+        if isinstance(v, dict):
+            children = flatten_dict(v, new_key, sep=sep).items()
+            if children:  # If the dictionary has children, extend items without adding the parent dictionary
+                items.extend(children)
+            else:  # If the dictionary is empty, add it as a value
+                items.append((new_key, v))
+        elif isinstance(v, list):
+            for i, item in enumerate(v):
+                if isinstance(item, dict):
+                    items.extend(flatten_dict(item, f"{new_key}{sep}{i}", sep=sep).items())
+                else:  # For lists of non-dictionary items, add each item
+                    items.append((f"{new_key}{sep}{i}", item))
+        else:
+            items.append((new_key, v))
+    return dict(items)
+
+
+def save_data(results_path, data_path):
 
     # The bag file should be in the same directory as your terminal
-    bag = rosbag.Bag(path + '.bag')
+    bag = rosbag.Bag(data_path + '.bag')
     topics = ['/objectposes', '/person_state_estimation/person_states', '/qualisys/pedestrian/pose', '/qualisys/pedestrian/velocity', '/qualisys/tinman/pose', '/qualisys/tinman/velocity']
-    column_names = ['topic', 'seq', 'stamp_secs', 'stamp_nsecs',
-        'positionx', 'positiony', 'positionz', 
-        'orientationx', 'orientationy', 'orientationz', 'orientationw']
-    df = pd.DataFrame(columns=column_names)
+    create_dir(results_path)
+    datasets = {}
 
     for topic, msg, t in bag.read_messages(topics=topics):
-        seq = msg.header.seq
-        stamp_secs = msg.header.stamp.secs
-        stamp_nsecs = msg.header.stamp.nsecs
-
         d = converter.convert_ros_message_to_dictionary(msg)
         print(d)
         print(topic)
+        data = flatten_dict(d)
+        print(data)
+
         print('\n')
 
-
-        if '/pose' in topic:
-            positionx = msg.pose.position.x
-            positiony = msg.pose.position.y
-            positionz = msg.pose.position.z
-            orientationx = msg.pose.orientation.x
-            orientationy = msg.pose.orientation.y
-            orientationz = msg.pose.orientation.z
-            orientationw = msg.pose.orientation.w
-        elif '/velocity' in topic:
-            positionx = msg.twist.linear.x
-            positiony = msg.twist.linear.y
-            positionz = msg.twist.linear.z
-            orientationx = msg.twist.angular.x
-            orientationy = msg.twist.angular.y
-            orientationz = msg.twist.angular.z
-            orientationw = '-'
-        elif '/objectposes' in topic:
-            positionx = msg.objects[0].pose.pose.position.x
-            positiony = msg.objects[0].pose.pose.position.y
-            positionz = msg.objects[0].pose.pose.position.z
-            orientationx = msg.objects[0].pose.pose.orientation.x
-            orientationy = msg.objects[0].pose.pose.orientation.y
-            orientationz = msg.objects[0].pose.pose.orientation.z
-            orientationw = msg.objects[0].pose.pose.orientation.w
-        elif '/person_states' in topics:
-            if len(msg.personstate) == 0:
-                positionx = None
-                positiony = None
-                positionz = None
-                orientationx = None
-                orientationy = None
-                orientationz = None
-                orientationw = None
-            else:
-                positionx = msg.personstate.position.x
-                positiony = msg.personstate.position.y
-                positionz = msg.personstate.position.z
-                orientationx = msg.personstate.orientation.x
-                orientationy = msg.personstate.orientation.y
-                orientationz = msg.personstate.orientation.z
-                orientationw = msg.personstate.orientation.w
-
-
-        dataset = pd.DataFrame({
-            'topic': [topic], 
-            'seq': [seq], 
-            'stamp_secs': [stamp_secs], 
-            'stamp_nsecs': [stamp_nsecs],
-            'positionx': [positionx],
-            'positiony': [positiony],
-            'positionz': [positionz],
-            'orientationx': [orientationx],
-            'orientationy': [orientationy],
-            'orientationz': [orientationz],
-            'orientationw': [orientationw]})
-        
-        df = pd.concat([df, dataset])
-
-    df.to_csv(CURRENT_FILE + path + '.csv')
+        if topic in datasets:
+            datasets[topic] = pd.concat([datasets[topic], pd.DataFrame([data], columns=data.keys())])    
+        else:
+            datasets[topic] = pd.DataFrame([data], columns=data.keys())
+                                           
+    for topic in topics:
+        data_file_path = results_path + topic.replace('/', '_') + '.csv'    
+        datasets[topic].to_csv(data_file_path, columns=datasets[topic].keys(), index=False)
 
 
 if __name__ == "__main__":
-    for path in file_paths:
-        save_data(CURRENT_FILE + path)
+    for file_name in file_paths:
+        results_path = CURRENT_FILE + '/results/' + file_name + '/'
+        data_path = CURRENT_FILE + '/data/' + file_name
+        save_data(results_path, data_path)
