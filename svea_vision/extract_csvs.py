@@ -5,11 +5,15 @@ import rospy_message_converter.message_converter as converter
 
 CURRENT_FILE = os.getcwd()
 file_paths = [
-    "out_2024-03-04-19-08-30_one_person_moving",
-    "out_2024-03-04-19-09-45_standing",
-    "out_2024-03-04-19-10-28_two_people_moving",
-    "out_2024-03-04-19-11-38_one_person_standing_one_moving",
-    "out_2024-03-04-19-13-21"
+    # "out_2024-03-04-19-08-30_one_person_moving",
+    # "out_2024-03-04-19-09-45_standing",
+    # "out_2024-03-04-19-10-28_two_people_moving",
+    # "out_2024-03-04-19-11-38_one_person_standing_one_moving",
+    # "out_2024-03-04-19-13-21"
+    "out_2024-03-25-10-31-23_one_person_moving",
+    "out_2024-03-25-10-32-56_one_standing_one_moving",
+    "out_2024-03-25-10-34-45_two_people_moving",
+    "out_2024-03-25-10-37-34_two_in_parallel"
 ]
 
 def create_dir(dir):
