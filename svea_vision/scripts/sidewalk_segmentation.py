@@ -139,18 +139,18 @@ class SidewalkSegementation:
             
     def segment_image(self, img_msg) -> (np.ndarray, Results):
         # Convert ROS image to OpenCV image
-        image = self.cv_bridge.imgmsg_to_cv2(img_msg, desired_encoding='rgb8')
+        self.image = self.cv_bridge.imgmsg_to_cv2(img_msg, desired_encoding='rgb8')
         
         # Adjust mean brightness
-        image = self.adjust_mean_brightness(image, self.mean_brightness)
+        self.image = self.adjust_mean_brightness(self.image, self.mean_brightness)
         
         # Run inference on the image
-        everything_results = self.model(image, device=self.device, imgsz=img_msg.width,
+        everything_results = self.model(self.image, device=self.device, imgsz=img_msg.width,
                                         conf=self.conf, iou=self.iou, retina_masks=True, verbose=self.verbose)
         self.log_times['inference_time'] = time.time()
         
         # Prepare a Prompt Process object
-        prompt_process = FastSAMPrompt(image, everything_results, device=self.device)
+        prompt_process = FastSAMPrompt(self.image, everything_results, device=self.device)
         
         # Prompt the results
         if self.prompt_type == 'bbox':
@@ -232,9 +232,11 @@ class SidewalkSegementation:
         
         # Get annotated image and publish 
         if self.publish_ann:
-            sidewalk_results[0].masks.data = torch.tensor(np.array([sidewalk_mask.astype('bool')]))
-            sidewalk_ann = sidewalk_results[0].plot(masks=True, conf=False, kpt_line=False,
-                                                    labels=False, boxes=False, probs=False)
+            # Create annotated image
+            color = np.array([0,0,255], dtype='uint8')
+            masked_image = np.where(sidewalk_mask[...,None], color, self.image)
+            sidewalk_ann = cv2.addWeighted(self.image, 0.75, masked_image, 0.25, 0)
+            
             if self.prompt_type=='bbox':
                 bbox = [int(scale*dim) for scale, dim in zip(self.prompt_bbox, 2*[img_msg.width, img_msg.height])]
                 cv2.rectangle(sidewalk_ann, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0,255,0), 2)        
