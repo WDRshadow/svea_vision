@@ -79,7 +79,7 @@
     <include if="$(arg enable_sidewalk_segmentation)" file="$(find svea_vision)/launch/sidewalk_segmentation.launch">
         <!-- Options -->
         <arg name="use_cuda"                    value="$(arg use_cuda)"/>
-        <arg name="prompt_type"                 value="$(ar= sidwalk_prompt_type)"/>
+        <arg name="prompt_type"                 value="$(arg sidewalk_prompt_type)"/>
         <arg name="publish_annotated"           value="$(arg sidewalk_publish_annotated)"/>
         <arg name="frame_id"                    value="$(arg sidewalk_frame_id)"/>
         <arg name="mean_brightness"             value="$(arg sidewalk_mean_brightness)"/>
@@ -90,7 +90,7 @@
         <!-- Produced topics -->
         <arg name="sidewalk_mask_topic"         value="sidewalk_mask"/>
         <arg name="sidewalk_pointcloud_topic"   value="sidewalk_pointcloud"/>
-        <arg name="sidewalk_ann_topic"          value="sidewalk_ann"/>
+        <arg name="sidewalk_annotated_topic"    value="sidewalk_annotated"/>
     </include>
 
 </launch>

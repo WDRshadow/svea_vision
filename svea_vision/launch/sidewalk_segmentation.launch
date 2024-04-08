@@ -66,13 +66,13 @@
         <param name="publish_pointcloud"      value="$(arg publish_pointcloud)"/>
 
         <!-- Consumed topics -->
-        <arg name="rgb_topic"                 value="$(arg rgb_topic)"/>
-        <arg name="pointcloud_topic"          value="$(arg pointcloud_topic)"/>
+        <param name="rgb_topic"               value="$(arg rgb_topic)"/>
+        <param name="pointcloud_topic"        value="$(arg pointcloud_topic)"/>
 
         <!-- Produced topics -->
-        <arg name="sidewalk_mask_topic"         value="$(arg sidewalk_mask_topic)"/>
-        <arg name="sidewalk_pointcloud_topic"   value="$(arg sidewalk_pointcloud_topic)"/>
-        <arg name="sidewalk_annotated_topic"    value="$(arg sidewalk_annotated_topic)"/>
+        <param name="sidewalk_mask_topic"         value="$(arg sidewalk_mask_topic)"/>
+        <param name="sidewalk_pointcloud_topic"   value="$(arg sidewalk_pointcloud_topic)"/>
+        <param name="sidewalk_annotated_topic"    value="$(arg sidewalk_annotated_topic)"/>
     </node>
 
 </launch>
