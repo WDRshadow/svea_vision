@@ -78,7 +78,7 @@ class SidewalkSegementation:
             
             # Publisher parameters
             self.publish_mask = load_param('~publish_mask', False)
-            self.publish_annotated = load_param('~publish_annnotated', True)
+            self.publish_annotated = load_param('~publish_annotated', True)
             self.publish_pointcloud = load_param('~publish_pointcloud', False)
             
             # Get package path
@@ -108,12 +108,12 @@ class SidewalkSegementation:
             # Publishers
             if self.publish_mask:
                 self.sidewalk_mask_pub = rospy.Publisher(self.sidewalk_mask_topic, Image, queue_size=1)
-            elif self.publish_ann:
-                self.sidewalk_annotated_pub = rospy.Publisher(self.sidewalk_annotated_pub, Image, queue_size=1)
-            elif self.publish_pointcloud:
+            if self.publish_annotated:
+                self.sidewalk_annotated_pub = rospy.Publisher(self.sidewalk_annotated_topic, Image, queue_size=1)
+            if self.publish_pointcloud:
                 self.sidewalk_pointcloud_pub = rospy.Publisher(self.sidewalk_pointcloud_topic, PointCloud2, queue_size=1)
-            else:
-                rospy.logerr('No output type enabled. Please set atleast one of publish_mask, publish_annnotated, or publish_pointcloud parameters to True. Exiting...')
+            if not (self.publish_mask or self.publish_annotated or self.publish_pointcloud):
+                rospy.logerr('No output type enabled. Please set atleast one of publish_mask, publish_annotated, or publish_pointcloud parameters to True. Exiting...')
             
             # Subscribers
             if self.publish_pointcloud:
@@ -189,7 +189,7 @@ class SidewalkSegementation:
         
         # Run inference on the image
         everything_results = self.sam_model(self.image, device=self.device, imgsz=img_msg.width,
-                                        sam_conf=self.sam_conf, sam_iou=self.sam_iou, retina_masks=True, verbose=self.verbose)
+                                        conf=self.sam_conf, iou=self.sam_iou, retina_masks=True, verbose=self.verbose)
         self.log_times['inference_time'] = time.time()
         
         # Prepare a Prompt Process object
