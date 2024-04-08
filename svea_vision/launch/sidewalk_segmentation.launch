@@ -2,45 +2,77 @@
 
 <launch>
 
-    <!-- Options -->
-    <arg name="model_name"          default="FastSAM-x.pt"/>
-    <arg name="use_cuda"            default="true"/>
-    <arg name="conf"                default="0.4"/>
-    <arg name="iou"                 default="0.9"/>
-    <arg name="prompt_type"         default="bbox"/>
-    <arg name="publish_ann"         default="false"/>
-    <arg name="brightness_window"   default="0.5"/>
-    <arg name="mean_brightness"     default="0.5"/>
-    <arg name="frame_id"            default=""/>
-    <arg name="verbose"             default="false"/>
+    <!-- Model parameters -->
+    <arg name="sam_model_name"          default="FastSAM-x.pt"/>
+    <arg name="sam_conf"                default="0.4"/>
+    <arg name="sam_iou"                 default="0.9"/>
+    <arg name="owl_model_name"          default="google/owlvit-base-patch32"/>
+    <arg name="owl_image_encoder_path"  default="/opt/nanoowl/data/owl_image_encoder_patch32.engine"/>
+    <arg name="owl_threshold"           default="0.1"/>
+
+    <!-- Prompt parameters -->
+    <arg name="prompt_type"             default="bbox"/>
+    <arg name="prompt_bbox"             default="[0.30, 0.50, 0.70, 0.90]"/>
+    <arg name="prompt_points"           default="[[0.50, 0.90]]"/>
+    <arg name="prompt_text"             default="a sidewalk or footpath or walkway or paved path for humans to walk on"/>
+
+    <!-- Other parameters -->
+    <arg name="use_cuda"                default="true"/>
+    <arg name="brightness_window"       default="0.5"/>
+    <arg name="mean_brightness"         default="0.5"/>
+    <arg name="frame_id"                default=""/>
+    <arg name="verbose"                 default="false"/>
+
+    <!-- Publish parameters -->
+    <arg name="publish_mask"            default="false"/>
+    <arg name="publish_annotated"       default="true"/>
+    <arg name="publish_pointcloud"      default="true"/>
 
     <!-- Consumed topics -->
-    <arg name="rgb_topic"           default="image"/>
-    <arg name="pointcloud_topic"    default="pointcloud"/>
+    <arg name="rgb_topic"               default="image"/>
+    <arg name="pointcloud_topic"        default="pointcloud"/>
 
     <!-- Produced topics -->
     <arg name="sidewalk_mask_topic"         default="sidewalk_mask"/>
     <arg name="sidewalk_pointcloud_topic"   default="sidewalk_pointcloud"/>
-    <arg name="sidewalk_ann_topic"          default="sidewalk_ann"/>
+    <arg name="sidewalk_annotated_topic"    default="sidewalk_annotated"/>
 
     <!-- Nodes -->
     <node name="sidewalk_segmentation" pkg="svea_vision" type="sidewalk_segmentation.py" output="screen">
-        <!-- Options -->
-        <param name="model_name"                    value="$(arg model_name)" />
-        <param name="use_cuda"                      value="$(arg use_cuda)" />
-        <param name="conf"                          value="$(arg conf)" />
-        <param name="iou"                           value="$(arg iou)" />
-        <param name="prompt_type"                   value="$(arg prompt_type)" />
-        <param name="publish_ann"                   value="$(arg publish_ann)" />
-        <param name="mean_brightness"               value="$(arg mean_brightness)" />
-        <param name="frame_id"                      value="$(arg frame_id)" />
-        <param name="verbose"                       value="$(arg verbose)" />
-        <!-- Topics -->
-        <param name="rgb_topic"                     value="$(arg rgb_topic)" />
-        <param name="pointcloud_topic"              value="$(arg pointcloud_topic)" />
-        <param name="sidewalk_mask_topic"           value="$(arg sidewalk_mask_topic)" />
-        <param name="sidewalk_pointcloud_topic"     value="$(arg sidewalk_pointcloud_topic)" />
-        <param name="sidewalk_ann_topic"            value="$(arg sidewalk_ann_topic)" />
+        <!-- Model parameters -->
+        <param name="sam_model_name"          value="$(arg sam_model_name)"/>
+        <param name="sam_conf"                value="$(arg sam_conf)"/>
+        <param name="sam_iou"                 value="$(arg sam_iou)"/>
+        <param name="owl_model_name"          value="$(arg owl_model_name)"/>
+        <param name="owl_image_encoder_path"  value="$(arg owl_image_encoder_path)"/>
+        <param name="owl_threshold"           value="$(arg owl_threshold)"/>
+
+        <!-- Prompt parameters -->
+        <param name="prompt_type"             value="$(arg prompt_type)"/>
+        <param name="prompt_bbox"             value="$(arg prompt_bbox)"/>
+        <param name="prompt_points"           value="$(arg prompt_points)"/>
+        <param name="prompt_text"             value="$(arg prompt_text)"/>
+
+        <!-- Other parameters -->
+        <param name="use_cuda"                value="$(arg use_cuda)"/>
+        <param name="brightness_window"       value="$(arg brightness_window)"/>
+        <param name="mean_brightness"         value="$(arg mean_brightness)"/>
+        <param name="frame_id"                value="$(arg frame_id)"/>
+        <param name="verbose"                 value="$(arg verbose)"/>
+
+        <!-- Publish parameters -->
+        <param name="publish_mask"            value="$(arg publish_mask)"/>
+        <param name="publish_annotated"       value="$(arg publish_annotated)"/>
+        <param name="publish_pointcloud"      value="$(arg publish_pointcloud)"/>
+
+        <!-- Consumed topics -->
+        <arg name="rgb_topic"                 value="$(arg rgb_topic)"/>
+        <arg name="pointcloud_topic"          value="$(arg pointcloud_topic)"/>
+
+        <!-- Produced topics -->
+        <arg name="sidewalk_mask_topic"         value="$(arg sidewalk_mask_topic)"/>
+        <arg name="sidewalk_pointcloud_topic"   value="$(arg sidewalk_pointcloud_topic)"/>
+        <arg name="sidewalk_annotated_topic"    value="$(arg sidewalk_annotated_topic)"/>
     </node>
 
 </launch>

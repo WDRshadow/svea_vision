@@ -11,8 +11,8 @@
     <arg name="sidewalk_frame_id"               default=""/>
     <arg name="sidewalk_brightness_window"      default="0.5"/>
     <arg name="sidewalk_mean_brightness"        default="0.5"/>
-    <arg name="prompt_type"                     default="bbox"/>
-    <arg name="publish_ann"                     default="true"/>
+    <arg name="sidewalk_prompt_type"            default="bbox"/>
+    <arg name="sidewalk_publish_annotated"      default="true"/>
     <arg name="verbose"                         default="false"/>
 
     <!-- Camera pose -->
@@ -79,8 +79,8 @@
     <include if="$(arg enable_sidewalk_segmentation)" file="$(find svea_vision)/launch/sidewalk_segmentation.launch">
         <!-- Options -->
         <arg name="use_cuda"                    value="$(arg use_cuda)"/>
-        <arg name="prompt_type"                 value="$(arg prompt_type)"/>
-        <arg name="publish_ann"                 value="$(arg publish_ann)"/>
+        <arg name="prompt_type"                 value="$(ar= sidwalk_prompt_type)"/>
+        <arg name="publish_annotated"           value="$(arg sidewalk_publish_annotated)"/>
         <arg name="frame_id"                    value="$(arg sidewalk_frame_id)"/>
         <arg name="mean_brightness"             value="$(arg sidewalk_mean_brightness)"/>
         <arg name="verbose"                     value="$(arg verbose)"/>

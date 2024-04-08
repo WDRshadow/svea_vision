@@ -65,9 +65,9 @@ class SidewalkSegementation:
             
             # Prompt parameters
             self.prompt_type = load_param('~prompt_type', 'bbox') # bbox or points or text
-            self.prompt_bbox = load_param('~bbox_prompt_corners', [0.30, 0.50, 0.70, 0.90]) # [x1, y1, x2, y2] in relative coordinates
-            self.prompt_points = load_param('~points_prompt_points', [[0.50, 0.90]]) # [[x1, y1], [x2, y2], ...] in relative coordinates
-            self.prompt_text = load_param('~text_prompt_text', 'a sidewalk or footpath or walkway or paved path for humans to walk on')
+            self.prompt_bbox = load_param('~prompt_bbox', [0.30, 0.50, 0.70, 0.90]) # [x1, y1, x2, y2] in relative coordinates
+            self.prompt_points = load_param('~prompt_points', [[0.50, 0.90]]) # [[x1, y1], [x2, y2], ...] in relative coordinates
+            self.prompt_text = load_param('~prompt_text', 'a sidewalk or footpath or walkway or paved path for humans to walk on')
             
             # Other parameters
             self.use_cuda = load_param('~use_cuda', True)
