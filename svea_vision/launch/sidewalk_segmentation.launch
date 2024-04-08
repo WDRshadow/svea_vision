@@ -12,8 +12,8 @@
 
     <!-- Prompt parameters -->
     <arg name="prompt_type"             default="bbox"/>
-    <arg name="prompt_bbox"             default="[0.30, 0.50, 0.70, 0.90]"/>
-    <arg name="prompt_points"           default="[[0.50, 0.90]]"/>
+    <!-- <arg name="prompt_bbox"             default="[0.30, 0.50, 0.70, 0.90]"/>
+    <arg name="prompt_points"           default="[[0.50, 0.90]]"/> -->
     <arg name="prompt_text"             default="a sidewalk or footpath or walkway or paved path for humans to walk on"/>
 
     <!-- Other parameters -->
@@ -49,8 +49,8 @@
 
         <!-- Prompt parameters -->
         <param name="prompt_type"             value="$(arg prompt_type)"/>
-        <param name="prompt_bbox"             value="$(arg prompt_bbox)"/>
-        <param name="prompt_points"           value="$(arg prompt_points)"/>
+        <!-- <param name="prompt_bbox"             value="$(arg prompt_bbox)"/>
+        <param name="prompt_points"           value="$(arg prompt_points)"/> -->
         <param name="prompt_text"             value="$(arg prompt_text)"/>
 
         <!-- Other parameters -->

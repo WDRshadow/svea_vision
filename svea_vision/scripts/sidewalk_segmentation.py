@@ -92,7 +92,7 @@ class SidewalkSegementation:
             if self.use_cuda:
                 self.sam_model.to('cuda')
                 if self.prompt_type=='text':
-                    self.owl_model = NanoOwlPredictor(self.owl_model, image_encoder_engine=self.owl_image_encoder)
+                    self.owl_model = NanoOwlPredictor(self.owl_model_name, image_encoder_engine=self.owl_image_encoder_path)
                     self.prompt_text = [self.prompt_text]
                     self.prompt_text_encodings = self.owl_model.encode_text(self.prompt_text)
             elif self.prompt_type=='text':
