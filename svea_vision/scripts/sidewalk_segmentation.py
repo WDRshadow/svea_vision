@@ -10,6 +10,7 @@ from sensor_msgs.msg import Image, PointCloud2
 
 import os
 import time
+import ast
 import cv2
 import PIL.Image
 import numpy as np
@@ -65,8 +66,10 @@ class SidewalkSegementation:
             
             # Prompt parameters
             self.prompt_type = load_param('~prompt_type', 'bbox') # bbox or points or text
-            self.prompt_bbox = load_param('~prompt_bbox', [0.30, 0.50, 0.70, 0.90]) # [x1, y1, x2, y2] in relative coordinates
-            self.prompt_points = load_param('~prompt_points', [[0.50, 0.90]]) # [[x1, y1], [x2, y2], ...] in relative coordinates
+            self.prompt_bbox = load_param('~prompt_bbox', "[0.30, 0.50, 0.70, 0.90]") # [x1, y1, x2, y2] in relative coordinates
+            self.prompt_bbox = ast.literal_eval(self.prompt_bbox)
+            self.prompt_points = load_param('~prompt_points', "[[0.50, 0.90]]") # [[x1, y1], [x2, y2], ...] in relative coordinates
+            self.prompt_points = ast.literal_eval(self.prompt_points)
             self.prompt_text = load_param('~prompt_text', 'a sidewalk or footpath or walkway or paved path for humans to walk on')
             
             # Other parameters

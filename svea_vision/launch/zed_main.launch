@@ -12,6 +12,7 @@
     <arg name="sidewalk_brightness_window"      default="0.5"/>
     <arg name="sidewalk_mean_brightness"        default="0.5"/>
     <arg name="sidewalk_prompt_type"            default="bbox"/>
+    <arg name="sidewalk_prompt_text"            default="a sidewalk or footpath or walkway or paved path for humans to walk on"/>
     <arg name="sidewalk_publish_annotated"      default="true"/>
     <arg name="verbose"                         default="false"/>
 
@@ -80,6 +81,7 @@
         <!-- Options -->
         <arg name="use_cuda"                    value="$(arg use_cuda)"/>
         <arg name="prompt_type"                 value="$(arg sidewalk_prompt_type)"/>
+        <arg name="prompt_text"                 value="$(arg sidewalk_prompt_text)"/>
         <arg name="publish_annotated"           value="$(arg sidewalk_publish_annotated)"/>
         <arg name="frame_id"                    value="$(arg sidewalk_frame_id)"/>
         <arg name="mean_brightness"             value="$(arg sidewalk_mean_brightness)"/>
