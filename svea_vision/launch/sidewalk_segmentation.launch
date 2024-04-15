@@ -15,6 +15,7 @@
     <arg name="prompt_bbox"                 default="[0.30, 0.50, 0.70, 0.90]"/>
     <arg name="prompt_points"               default="[[0.50, 0.90]]"/>
     <arg name="prompt_text"                 default="a sidewalk or footpath or walkway or paved path for humans to walk on"/>
+    <arg name="use_bbox_fallback"           default="true"/>
 
     <!-- Other parameters -->
     <arg name="use_cuda"                    default="true"/>
@@ -52,6 +53,7 @@
         <param name="prompt_bbox"                   value="$(arg prompt_bbox)"/>
         <param name="prompt_points"                 value="$(arg prompt_points)"/>
         <param name="prompt_text"                   value="$(arg prompt_text)"/>
+        <param name="use_bbox_fallback"             value="$(arg use_bbox_fallback)"/>
 
         <!-- Other parameters -->
         <param name="use_cuda"                      value="$(arg use_cuda)"/>

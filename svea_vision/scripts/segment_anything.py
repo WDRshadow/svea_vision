@@ -14,6 +14,7 @@ import ast
 import cv2
 import PIL.Image
 import numpy as np
+from typing import Optional
 
 from ultralytics import FastSAM
 from ultralytics.models.fastsam import FastSAMPrompt
@@ -71,6 +72,7 @@ class SegmentAnything:
             self.prompt_points = load_param('~prompt_points', "[[0.50, 0.90]]") # [[x1, y1], [x2, y2], ...] in relative coordinates
             self.prompt_points = ast.literal_eval(self.prompt_points)
             self.prompt_text = load_param('~prompt_text', 'a person')
+            self.use_bbox_fallback = load_param('~use_bbox_fallback', False) # Use bbox prompt if text prompt does not detect anything
             
             # Other parameters
             self.use_cuda = load_param('~use_cuda', True)
@@ -183,7 +185,7 @@ class SegmentAnything:
         
         return bbox
     
-    def segment_image(self, img_msg) -> np.ndarray:
+    def segment_image(self, img_msg) -> Optional[np.ndarray]:
         # Convert ROS image to OpenCV image
         self.image = self.cv_bridge.imgmsg_to_cv2(img_msg, desired_encoding='rgb8')
         
@@ -203,9 +205,12 @@ class SegmentAnything:
             # Use OWL model to get bbox
             self.bbox = self.owl_predict(PIL.Image.fromarray(self.image), self.prompt_text, self.prompt_text_encodings, self.owl_threshold)
             if len(self.bbox) == 0:
-                if self.verbose:
-                    rospy.loginfo('OWL model has no detections. Using default bbox prompt.')
-                self.bbox = [int(scale*dim) for scale, dim in zip(self.prompt_bbox, 2*[img_msg.width, img_msg.height])]
+                if self.use_bbox_fallback:
+                    rospy.loginfo('OWL model has no detections. Using fallback bbox prompt.')
+                    self.bbox = [int(scale*dim) for scale, dim in zip(self.prompt_bbox, 2*[img_msg.width, img_msg.height])]
+                else:
+                    rospy.loginfo('OWL model has no detections. Skipping segmentation.')
+                    return None
             segmentation_results = prompt_process.box_prompt(self.bbox)            
         elif self.prompt_type == 'bbox':
             # Convert bbox from relative to absolute
@@ -259,6 +264,10 @@ class SegmentAnything:
         
         # Segment image
         segmented_mask = self.segment_image(img_msg)
+        
+        # Return if no mask is generated
+        if segmented_mask is None:
+            return
         
         # Extract pointcloud
         if self.publish_pointcloud:
