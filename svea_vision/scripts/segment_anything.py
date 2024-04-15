@@ -39,20 +39,20 @@ def replace_base(old, new) -> str:
     return '/'.join(ns)
 
 
-class SidewalkSegementation:
+class SegmentAnything:
     
     def __init__(self) -> None:
         try:
             # Initialize node
-            rospy.init_node('sidewalk_segmentation')
+            rospy.init_node('segment_anything', anonymous=True)
             
             # Topic Parameters
             self.rgb_topic = load_param('~rgb_topic', 'image')
             self.pointcloud_topic = load_param('~pointcloud_topic', 'pointcloud')
             
-            self.sidewalk_mask_topic = load_param('~sidewalk_mask_topic', 'sidewalk_mask')
-            self.sidewalk_annotated_topic = load_param('~sidewalk_annotated_topic', 'sidewalk_annotated')
-            self.sidewalk_pointcloud_topic = load_param('~sidewalk_pointcloud_topic', 'sidewalk_pointcloud')
+            self.segmented_mask_topic = load_param('~segmented_mask_topic', 'segmented_mask')
+            self.segmented_image_topic = load_param('~segmented_image_topic', 'segmented_image')
+            self.segmented_pointcloud_topic = load_param('~segmented_pointcloud_topic', 'segmented_pointcloud')
             
             # SAM model parameters
             self.sam_model_name = load_param('~sam_model_name', 'FastSAM-x.pt') # FastSAM-s.pt or FastSAM-x.pt
@@ -70,7 +70,7 @@ class SidewalkSegementation:
             self.prompt_bbox = ast.literal_eval(self.prompt_bbox)
             self.prompt_points = load_param('~prompt_points', "[[0.50, 0.90]]") # [[x1, y1], [x2, y2], ...] in relative coordinates
             self.prompt_points = ast.literal_eval(self.prompt_points)
-            self.prompt_text = load_param('~prompt_text', 'a sidewalk or footpath or walkway or paved path for humans to walk on')
+            self.prompt_text = load_param('~prompt_text', 'a person')
             
             # Other parameters
             self.use_cuda = load_param('~use_cuda', True)
@@ -81,7 +81,7 @@ class SidewalkSegementation:
             
             # Publisher parameters
             self.publish_mask = load_param('~publish_mask', False)
-            self.publish_annotated = load_param('~publish_annotated', True)
+            self.publish_image = load_param('~publish_image', True)
             self.publish_pointcloud = load_param('~publish_pointcloud', False)
             
             # Get package path
@@ -110,13 +110,13 @@ class SidewalkSegementation:
             
             # Publishers
             if self.publish_mask:
-                self.sidewalk_mask_pub = rospy.Publisher(self.sidewalk_mask_topic, Image, queue_size=1)
-            if self.publish_annotated:
-                self.sidewalk_annotated_pub = rospy.Publisher(self.sidewalk_annotated_topic, Image, queue_size=1)
+                self.segmented_mask_pub = rospy.Publisher(self.segmented_mask_topic, Image, queue_size=1)
+            if self.publish_image:
+                self.segmented_image_pub = rospy.Publisher(self.segmented_image_topic, Image, queue_size=1)
             if self.publish_pointcloud:
-                self.sidewalk_pointcloud_pub = rospy.Publisher(self.sidewalk_pointcloud_topic, PointCloud2, queue_size=1)
-            if not (self.publish_mask or self.publish_annotated or self.publish_pointcloud):
-                rospy.logerr('No output type enabled. Please set atleast one of publish_mask, publish_annotated, or publish_pointcloud parameters to True. Exiting...')
+                self.segmented_pointcloud_pub = rospy.Publisher(self.segmented_pointcloud_topic, PointCloud2, queue_size=1)
+            if not (self.publish_mask or self.publish_image or self.publish_pointcloud):
+                rospy.logerr('No output type enabled. Please set atleast one of publish_mask, publish_image, or publish_pointcloud parameters to True. Exiting...')
             
             # Subscribers
             if self.publish_pointcloud:
@@ -206,37 +206,37 @@ class SidewalkSegementation:
                 if self.verbose:
                     rospy.loginfo('OWL model has no detections. Using default bbox prompt.')
                 self.bbox = [int(scale*dim) for scale, dim in zip(self.prompt_bbox, 2*[img_msg.width, img_msg.height])]
-            sidewalk_results = prompt_process.box_prompt(self.bbox)            
+            segmentation_results = prompt_process.box_prompt(self.bbox)            
         elif self.prompt_type == 'bbox':
             # Convert bbox from relative to absolute
             self.bbox = [int(scale*dim) for scale, dim in zip(self.prompt_bbox, 2*[img_msg.width, img_msg.height])]
-            sidewalk_results = prompt_process.box_prompt(self.bbox)
+            segmentation_results = prompt_process.box_prompt(self.bbox)
         elif self.prompt_type == 'points':
             # Convert points from relative to absolute
             points=[[int(scale*dim) for scale, dim in zip(point, [img_msg.width, img_msg.height])] for point in self.prompt_points]
-            sidewalk_results = prompt_process.point_prompt(points, pointlabel=[1])
+            segmentation_results = prompt_process.point_prompt(points, pointlabel=[1])
         else:
             rospy.logerr("Invalid value for prompt_type parameter")
             
         self.log_times['prompt_time'] = time.time()
         
         # Apply morphological opening to remove small noise
-        sidewalk_mask = sidewalk_results[0].cpu().numpy().masks.data[0].astype('uint8')*255
+        segmented_mask = segmentation_results[0].cpu().numpy().masks.data[0].astype('uint8')*255
         erosion_kernel = np.ones((5,5), np.uint8)
         dilation_kernel = np.ones((3,3), np.uint8)
-        sidewalk_mask = cv2.erode(sidewalk_mask, erosion_kernel, iterations=1)
-        sidewalk_mask = cv2.dilate(sidewalk_mask, dilation_kernel, iterations=1)
+        segmented_mask = cv2.erode(segmented_mask, erosion_kernel, iterations=1)
+        segmented_mask = cv2.dilate(segmented_mask, dilation_kernel, iterations=1)
         
-        # Select the largest contour from the mask
-        contours, _ = cv2.findContours(sidewalk_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        # Select the largest contour from the segmented mask
+        contours, _ = cv2.findContours(segmented_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if len(contours) > 0:
             max_contour = max(contours, key=cv2.contourArea)
-            sidewalk_mask = np.zeros_like(sidewalk_mask)
-            cv2.fillPoly(sidewalk_mask, [max_contour], 255)
+            segmented_mask = np.zeros_like(segmented_mask)
+            cv2.fillPoly(segmented_mask, [max_contour], 255)
         
         self.log_times['postprocess_time'] = time.time()
                     
-        return sidewalk_mask
+        return segmented_mask
             
     def extract_pointcloud(self, pc_msg, mask) -> PointCloud2:
         # Convert ROS pointcloud to Numpy array
@@ -258,15 +258,15 @@ class SidewalkSegementation:
         self.log_times['start_time'] = time.time()
         
         # Segment image
-        sidewalk_mask = self.segment_image(img_msg)
+        segmented_mask = self.segment_image(img_msg)
         
         # Extract pointcloud
         if self.publish_pointcloud:
-            extracted_pc_msg = self.extract_pointcloud(pc_msg, sidewalk_mask)
+            extracted_pc_msg = self.extract_pointcloud(pc_msg, segmented_mask)
             
             # Transform pointcloud to frame_id if specified
             if self.frame_id == '' or self.frame_id == extracted_pc_msg.header.frame_id:
-                sidewalk_pc_msg = extracted_pc_msg
+                segmented_pc_msg = extracted_pc_msg
             else:        
                 try:
                     transform_stamped = self.tf_buf.lookup_transform(self.frame_id, extracted_pc_msg.header.frame_id, extracted_pc_msg.header.stamp)
@@ -274,29 +274,29 @@ class SidewalkSegementation:
                     rospy.logwarn("{}: Transform lookup from {} to {} failed for the requested time. Using latest transform instead.".format(
                         rospy.get_name(), extracted_pc_msg.header.frame_id, self.frame_id))
                     transform_stamped = self.tf_buf.lookup_transform(self.frame_id, extracted_pc_msg.header.frame_id, rospy.Time(0))
-                sidewalk_pc_msg = do_transform_cloud(extracted_pc_msg, transform_stamped)
+                segmented_pc_msg = do_transform_cloud(extracted_pc_msg, transform_stamped)
         self.log_times['extract_pc_time'] = time.time()
         
-        # Publish mask
+        # Publish segmented mask
         if self.publish_mask:
-            mask_msg = self.cv_bridge.cv2_to_imgmsg(sidewalk_mask, encoding='mono8')
-            self.sidewalk_mask_pub.publish(mask_msg)
+            segmented_mask_msg = self.cv_bridge.cv2_to_imgmsg(segmented_mask, encoding='mono8')
+            self.segmented_mask_pub.publish(segmented_mask_msg)
         
-        # Publish annotated image
-        if self.publish_annotated:
-            # Create annotated image
+        # Publish segmented image
+        if self.publish_image:
+            # Create segmented image
             color = np.array([0,0,255], dtype='uint8')
-            masked_image = np.where(sidewalk_mask[...,None], color, self.image)
-            sidewalk_annotated = cv2.addWeighted(self.image, 0.75, masked_image, 0.25, 0)
+            segmented_masked_image = np.where(segmented_mask[...,None], color, self.image)
+            segmented_image = cv2.addWeighted(self.image, 0.75, segmented_masked_image, 0.25, 0)
             
             if self.prompt_type=='bbox' or self.prompt_type=='text':
-                cv2.rectangle(sidewalk_annotated, (self.bbox[0], self.bbox[1]), (self.bbox[2], self.bbox[3]), (0,255,0), 2)        
-            annotated_msg = self.cv_bridge.cv2_to_imgmsg(sidewalk_annotated, encoding='rgb8')
-            self.sidewalk_annotated_pub.publish(annotated_msg)
+                cv2.rectangle(segmented_image, (self.bbox[0], self.bbox[1]), (self.bbox[2], self.bbox[3]), (0,255,0), 2)        
+            segmented_image_msg = self.cv_bridge.cv2_to_imgmsg(segmented_image, encoding='rgb8')
+            self.segmented_image_pub.publish(segmented_image_msg)
             
         # Publish pointcloud
         if self.publish_pointcloud:
-            self.sidewalk_pointcloud_pub.publish(sidewalk_pc_msg)
+            self.segmented_pointcloud_pub.publish(segmented_pc_msg)
         
         self.log_times['publish_time'] = time.time()
         
@@ -313,5 +313,5 @@ class SidewalkSegementation:
     
     
 if __name__ == '__main__':
-    node = SidewalkSegementation()
+    node = SegmentAnything()
     node.run()
