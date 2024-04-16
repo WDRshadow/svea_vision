@@ -9,6 +9,7 @@
     <arg name="owl_model_name"              default="google/owlvit-base-patch32"/>
     <arg name="owl_image_encoder_path"      default="/opt/nanoowl/data/owl_image_encoder_patch32.engine"/>
     <arg name="owl_threshold"               default="0.1"/>
+    <arg name="owl_roi"                     default="[]"/>
 
     <!-- Prompt parameters -->
     <arg name="prompt_type"                 default="bbox"/>

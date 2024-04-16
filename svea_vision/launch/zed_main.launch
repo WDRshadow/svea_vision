@@ -11,6 +11,7 @@
     <arg name="sidewalk_frame_id"               default=""/>
     <arg name="sidewalk_prompt_type"            default="bbox"/>
     <arg name="sidewalk_prompt_text"            default="a sidewalk or footpath or walkway or paved path for humans to walk on"/>
+    <arg name="sidewalk_owl_roi"                default="[]"/>
     <arg name="verbose"                         default="false"/>
 
     <!-- Camera pose -->
@@ -80,6 +81,7 @@
         <arg name="frame_id"                    value="$(arg sidewalk_frame_id)"/>
         <arg name="prompt_type"                 value="$(arg sidewalk_prompt_type)"/>
         <arg name="prompt_text"                 value="$(arg sidewalk_prompt_text)"/>
+        <arg name="owl_roi"                     value="$(arg sidewalk_owl_roi)"/>
         <arg name="verbose"                     value="$(arg verbose)"/>
         <!-- Consumed topics -->
         <arg name="rgb_topic"                   value="$(arg image)"/>

@@ -64,6 +64,7 @@ class SegmentAnything:
             self.owl_model_name = load_param('~owl_model_name', 'google/owlvit-base-patch32')
             self.owl_image_encoder_path = load_param('~owl_image_encoder_path', '/opt/nanoowl/data/owl_image_encoder_patch32.engine')
             self.owl_threshold = load_param('~owl_threshold', 0.1)
+            self.owl_roi = load_param('~owl_roi', "[]") # [x1, y1, x2, y2] in relative coordinates
             
             # Prompt parameters
             self.prompt_type = load_param('~prompt_type', 'bbox') # bbox or points or text
@@ -163,10 +164,17 @@ class SegmentAnything:
         # Convert back to RGB
         return cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)
     
-    def owl_predict(self, image, text, text_encodings, threshold) -> list:
+    def owl_predict(self, image, text, text_encodings, threshold, roi) -> list:
+        # Set ROI
+        if len(roi) == 4:
+            roi = [int(scale*dim) for scale, dim in zip(roi, 2*[image.width, image.height])]
+            image_roi = image.crop(roi)
+        else:
+            image_roi = image
+        
         # Predict using OWL model
         owl_output = self.owl_model.predict(
-            image=image,
+            image=image_roi,
             text=text,
             text_encodings=text_encodings,
             pad_square=True,
@@ -177,7 +185,13 @@ class SegmentAnything:
         n_detections = len(owl_output.boxes)
         if n_detections > 0:
             max_score_index = owl_output.scores.argmax()
-            bbox = [int(x) for x in owl_output.boxes[max_score_index]]
+            roi_bbox = [int(x) for x in owl_output.boxes[max_score_index]]
+            # Shift the bbox from roi to the original image and clip to image boundaries
+            bbox = roi_bbox + 2*[roi[0], roi[1]]
+            bbox[0] = max(0, bbox[0])
+            bbox[1] = max(0, bbox[1])
+            bbox[2] = min(image.width, bbox[2])
+            bbox[3] = min(image.height, bbox[3])
             if self.verbose:
                 rospy.loginfo('OWL model detections: {}'.format(n_detections))
         else:
