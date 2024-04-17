@@ -107,7 +107,7 @@ class SegmentAnything:
                     self.prompt_text = [self.prompt_text]
                     self.prompt_text_encodings = self.owl_model.encode_text(self.prompt_text)
             elif self.prompt_type=='text':
-                raise Exception('{}: text prompt is only supported when use_cuda is set to True. Only bbox and points prompts are supported without CUDA. Exiting...'.format(rospy.get_name()))
+                raise Exception('text prompt is only supported when use_cuda is set to True. Only bbox and points prompts are supported without CUDA. Exiting...')
             
             # CV Bridge
             self.cv_bridge = CvBridge()
@@ -124,7 +124,7 @@ class SegmentAnything:
             if self.publish_pointcloud:
                 self.segmented_pointcloud_pub = rospy.Publisher(self.segmented_pointcloud_topic, PointCloud2, queue_size=1)
             if not (self.publish_mask or self.publish_image or self.publish_pointcloud):
-                raise Exception('{}: No output type enabled. Please set atleast one of publish_mask, publish_image, or publish_pointcloud parameters to True. Exiting...'.format(rospy.get_name()))
+                raise Exception('No output type enabled. Please set atleast one of publish_mask, publish_image, or publish_pointcloud parameters to True. Exiting...')
             
             # Subscribers
             if self.publish_pointcloud:
@@ -141,8 +141,8 @@ class SegmentAnything:
             
         except Exception as e:
             # Log error
-            rospy.logfatal(e)
-            rospy.signal_shutdown('Error')
+            rospy.logfatal("{}: {}".format(rospy.get_name(), e))
+            rospy.signal_shutdown("Initialization failed: {}".format(e))
 
         else:
             # Log status
