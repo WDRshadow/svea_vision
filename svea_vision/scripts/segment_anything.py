@@ -107,7 +107,7 @@ class SegmentAnything:
                     self.prompt_text = [self.prompt_text]
                     self.prompt_text_encodings = self.owl_model.encode_text(self.prompt_text)
             elif self.prompt_type=='text':
-                rospy.logerr('text prompt is only supported when use_cuda is set to True. Only bbox and points prompts are supported without CUDA. Exiting...')
+                raise Exception('{}: text prompt is only supported when use_cuda is set to True. Only bbox and points prompts are supported without CUDA. Exiting...'.format(rospy.get_name()))
             
             # CV Bridge
             self.cv_bridge = CvBridge()
@@ -124,7 +124,7 @@ class SegmentAnything:
             if self.publish_pointcloud:
                 self.segmented_pointcloud_pub = rospy.Publisher(self.segmented_pointcloud_topic, PointCloud2, queue_size=1)
             if not (self.publish_mask or self.publish_image or self.publish_pointcloud):
-                rospy.logerr('No output type enabled. Please set atleast one of publish_mask, publish_image, or publish_pointcloud parameters to True. Exiting...')
+                raise Exception('{}: No output type enabled. Please set atleast one of publish_mask, publish_image, or publish_pointcloud parameters to True. Exiting...'.format(rospy.get_name()))
             
             # Subscribers
             if self.publish_pointcloud:
@@ -141,7 +141,8 @@ class SegmentAnything:
             
         except Exception as e:
             # Log error
-            rospy.logerr(e)
+            rospy.logfatal(e)
+            rospy.signal_shutdown('Error')
 
         else:
             # Log status
@@ -152,7 +153,7 @@ class SegmentAnything:
         try:
             rospy.spin()
         except rospy.ROSInterruptException:
-            rospy.loginfo('Shutting down {}'.format(rospy.get_name()))
+            rospy.loginfo('{}: Shutting down'.format(rospy.get_name()))
             
     def adjust_mean_brightness(self, image, mean_brightness) -> np.ndarray:
         # Convert image to HSV
