@@ -27,12 +27,12 @@ def replace_base(old, new) -> str:
     return '/'.join(ns)
 
 
-class SidewalkPointCloudToOccupancyGrid:
+class SidewalkMapper:
     
     def __init__(self):
         try:
             # Initialize node
-            rospy.init_node('sidewalk_pointcloud_to_occupancy_grid')
+            rospy.init_node('sidewalk_mapper')
             
             # Topic parameters
             self.sidewalk_pointcloud_topic = load_param('~sidewalk_pointcloud_topic', 'sidewalk_pointcloud')
@@ -75,17 +75,18 @@ class SidewalkPointCloudToOccupancyGrid:
             
         except Exception as e:
             # Log error
-            rospy.logerr(e)
+            rospy.logfatal("{}: {}".format(rospy.get_name(), e))
+            rospy.signal_shutdown("Initialization failed: {}".format(e))
 
         else:
             # Log status
-            rospy.loginfo("{} node initialized.".format(rospy.get_name()))
+            rospy.loginfo("{}: Initialized successfully".format(rospy.get_name()))
             
     def run(self):
         try:
             rospy.spin()
         except rospy.ROSInterruptException:
-            rospy.loginfo('Shutting down {}'.format(rospy.get_name()))
+            rospy.loginfo("{}: ROS Interrupted, shutting down...".format(rospy.get_name()))
             
     def pointcloud_callback(self, msg):
         # Transform pointcloud to base frame
@@ -142,5 +143,5 @@ class SidewalkPointCloudToOccupancyGrid:
     
     
 if __name__ == '__main__':
-    node = SidewalkPointCloudToOccupancyGrid()
+    node = SidewalkMapper()
     node.run()
