@@ -65,6 +65,11 @@ class SegmentAnything:
             self.owl_image_encoder_path = load_param('~owl_image_encoder_path', '/opt/nanoowl/data/owl_image_encoder_patch32.engine')
             self.owl_threshold = load_param('~owl_threshold', 0.1)
             self.owl_roi = load_param('~owl_roi', "[]") # [x1, y1, x2, y2] in relative coordinates
+            self.owl_roi = ast.literal_eval(self.owl_roi)
+            if len(self.owl_roi) != 4:
+                self.owl_roi = [0.0, 0.0, 1.0, 1.0]
+                if len(self.owl_roi) != 0:
+                    rospy.logwarn('{}: Invalid value for owl_roi parameter. Using full image for OWL prediction.'.format(rospy.get_name()))
             
             # Prompt parameters
             self.prompt_type = load_param('~prompt_type', 'bbox') # bbox or points or text
@@ -165,13 +170,10 @@ class SegmentAnything:
         return cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)
     
     def owl_predict(self, image, text, text_encodings, threshold, roi) -> list:
-        # Set ROI
-        if len(roi) == 4:
-            roi = [int(scale*dim) for scale, dim in zip(roi, 2*[image.width, image.height])]
-            image_roi = image.crop(roi)
-        else:
-            image_roi = image
-        
+        # Crop image to ROI
+        roi = [int(scale*dim) for scale, dim in zip(roi, 2*[image.width, image.height])]
+        image_roi = image.crop(roi)
+            
         # Predict using OWL model
         owl_output = self.owl_model.predict(
             image=image_roi,
@@ -217,7 +219,7 @@ class SegmentAnything:
         # Prompt the results
         if self.prompt_type == 'text':
             # Use OWL model to get bbox
-            self.bbox = self.owl_predict(PIL.Image.fromarray(self.image), self.prompt_text, self.prompt_text_encodings, self.owl_threshold)
+            self.bbox = self.owl_predict(PIL.Image.fromarray(self.image), self.prompt_text, self.prompt_text_encodings, self.owl_threshold, self.owl_roi)
             if len(self.bbox) == 0:
                 if self.use_bbox_fallback:
                     rospy.loginfo('OWL model has no detections. Using fallback bbox prompt.')

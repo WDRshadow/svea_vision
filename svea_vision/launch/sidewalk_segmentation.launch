@@ -48,6 +48,7 @@
         <param name="owl_model_name"                value="$(arg owl_model_name)"/>
         <param name="owl_image_encoder_path"        value="$(arg owl_image_encoder_path)"/>
         <param name="owl_threshold"                 value="$(arg owl_threshold)"/>
+        <param name="owl_roi"                       value="$(arg owl_roi)"/>
 
         <!-- Prompt parameters -->
         <param name="prompt_type"                   value="$(arg prompt_type)"/>
