@@ -67,9 +67,9 @@ class SegmentAnything:
             self.owl_roi = load_param('~owl_roi', "[]") # [x1, y1, x2, y2] in relative coordinates
             self.owl_roi = ast.literal_eval(self.owl_roi)
             if len(self.owl_roi) != 4:
-                self.owl_roi = [0.0, 0.0, 1.0, 1.0]
                 if len(self.owl_roi) != 0:
                     rospy.logwarn('{}: Invalid value for owl_roi parameter. Using full image for OWL prediction.'.format(rospy.get_name()))
+                self.owl_roi = [0.0, 0.0, 1.0, 1.0]
             
             # Prompt parameters
             self.prompt_type = load_param('~prompt_type', 'bbox') # bbox or points or text
@@ -146,7 +146,7 @@ class SegmentAnything:
 
         else:
             # Log status
-            rospy.loginfo('{} node initialized with SAM model: {}, OWL model: {}, prompt type: {}, frame_id: {}, use_cuda: {}'.format(
+            rospy.loginfo('{}: Initialized successfully with SAM model: {}, OWL model: {}, prompt type: {}, frame_id: {}, use_cuda: {}'.format(
                 rospy.get_name(), self.sam_model_name, self.owl_model_name, self.prompt_type, self.frame_id, self.use_cuda))
             
     def run(self) -> None:
@@ -180,7 +180,7 @@ class SegmentAnything:
             image=image_roi,
             text=text,
             text_encodings=text_encodings,
-            pad_square=True,
+            pad_square=False,
             threshold=[threshold]
         )
         
@@ -190,7 +190,7 @@ class SegmentAnything:
             max_score_index = owl_output.scores.argmax()
             roi_bbox = [int(x) for x in owl_output.boxes[max_score_index]]
             # Shift the bbox from roi to the original image and clip to image boundaries
-            bbox = roi_bbox + 2*[roi[0], roi[1]]
+            bbox = [sum(x) for x in zip(roi_bbox, 2*[roi[0], roi[1]])]
             bbox[0] = max(0, bbox[0])
             bbox[1] = max(0, bbox[1])
             bbox[2] = min(image.width, bbox[2])
