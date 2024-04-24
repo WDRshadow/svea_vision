@@ -7,6 +7,7 @@ from sensor_msgs.msg import PointCloud2
 from nav_msgs.msg import OccupancyGrid
 
 import numpy as np
+import open3d as o3d
 
 np.float = float    # NOTE: Temporary fix for ros_numpy issue; check #39
 import ros_numpy
@@ -45,13 +46,17 @@ class SidewalkMapper:
             self.obstacle_z_max = load_param('~obstacle_z_max', 2.0)
             
             # Occupancy grid parameters
+            self.world_frame = load_param('~world_frame', 'map')
             self.base_frame = load_param('~base_frame', 'base_link')
             self.resolution = load_param('~resolution', 0.05)
-            self.width = load_param('~width', 20)
-            self.height = load_param('~height', 20)
+            self.width = load_param('~width', 50)
+            self.height = load_param('~height', 50)
             self.occupied_value = load_param('~occupied_value', 100)
             self.free_value = load_param('~free_value', 0)
             self.unknown_value = load_param('~unknown_value', -1)
+            
+            # Other parameters
+            self.use_cuda = load_param('~use_cuda', False)
             
             # Initialize occupancy grid
             self.sidewalk_occupancy_grid = OccupancyGrid()
