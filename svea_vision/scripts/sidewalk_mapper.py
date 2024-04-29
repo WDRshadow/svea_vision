@@ -40,17 +40,17 @@ class SidewalkMapper:
             self.sidewalk_occupancy_grid_topic = load_param('~sidewalk_occupancy_grid_topic', 'sidewalk_occupancy_grid')
             
             # Sidewalk parameters
-            self.sidewalk_z_min = load_param('~sidewalk_z_min', -0.2)
-            self.sidewalk_z_max = load_param('~sidewalk_z_max', 0.2)
-            self.obstacle_z_min = load_param('~obstacle_z_min', 0.2)
+            self.sidewalk_z_min = load_param('~sidewalk_z_min', -0.5)
+            self.sidewalk_z_max = load_param('~sidewalk_z_max', 0.5)
+            self.obstacle_z_min = load_param('~obstacle_z_min', 0.5)
             self.obstacle_z_max = load_param('~obstacle_z_max', 2.0)
             
             # Occupancy grid parameters
             self.world_frame = load_param('~world_frame', 'map')
             self.base_frame = load_param('~base_frame', 'base_link')
             self.resolution = load_param('~resolution', 0.05)
-            self.width = load_param('~width', 50)
-            self.height = load_param('~height', 50)
+            self.width = load_param('~width', 100)
+            self.height = load_param('~height', 100)
             self.occupied_value = load_param('~occupied_value', 100)
             self.free_value = load_param('~free_value', 0)
             self.unknown_value = load_param('~unknown_value', -1)
@@ -58,9 +58,13 @@ class SidewalkMapper:
             # Other parameters
             self.use_cuda = load_param('~use_cuda', False)
             
-            # Initialize occupancy grid
+            # TF2
+            self.tf_buf = tf2_ros.Buffer()
+            self.tf_listener = tf2_ros.TransformListener(self.tf_buf)
+            
+            # Initialize occupancy grid message
             self.sidewalk_occupancy_grid = OccupancyGrid()
-            self.sidewalk_occupancy_grid.header.frame_id = self.base_frame
+            self.sidewalk_occupancy_grid.header.frame_id = self.world_frame
             self.sidewalk_occupancy_grid.info.resolution = self.resolution
             self.sidewalk_occupancy_grid.info.width = int(self.width/self.resolution)
             self.sidewalk_occupancy_grid.info.height = int(self.height/self.resolution)
@@ -68,9 +72,8 @@ class SidewalkMapper:
             self.sidewalk_occupancy_grid.info.origin.position.x = -self.width/2
             self.sidewalk_occupancy_grid.info.origin.position.y = -self.height/2
             
-            # TF2
-            self.tf_buf = tf2_ros.Buffer()
-            self.tf_listener = tf2_ros.TransformListener(self.tf_buf)
+            # Initialize variables
+            self.grid_data = np.full((self.sidewalk_occupancy_grid.info.width, self.sidewalk_occupancy_grid.info.height), self.unknown_value)
             
             # Publishers
             self.sidewalk_occupancy_grid_pub = rospy.Publisher(self.sidewalk_occupancy_grid_topic, OccupancyGrid, queue_size=1)
@@ -94,33 +97,33 @@ class SidewalkMapper:
             rospy.loginfo("{}: ROS Interrupted, shutting down...".format(rospy.get_name()))
             
     def pointcloud_callback(self, msg):
-        # Transform pointcloud to base frame
-        if not self.base_frame:
-            rospy.logerr('{}: base_frame not set'.format(rospy.get_name()))
+        # Transform pointcloud to world frame
+        if not self.world_frame:
+            rospy.logerr('{}: world_frame not set'.format(rospy.get_name()))
             return
-        if self.base_frame != msg.header.frame_id:
+        if self.world_frame != msg.header.frame_id:
             try:
-                transform_stamped = self.tf_buf.lookup_transform(self.base_frame, msg.header.frame_id, msg.header.stamp)
+                transform_stamped = self.tf_buf.lookup_transform(self.world_frame, msg.header.frame_id, msg.header.stamp)
             except tf2_ros.LookupException:
-                rospy.logwarn("{}: Transform lookup from {} to {} failed for the requested time. Using latest transform instead.".format(rospy.get_name(), msg.header.frame_id, self.base_frame))
-                transform_stamped = self.tf_buf.lookup_transform(self.base_frame, msg.header.frame_id, rospy.Time(0))
+                rospy.logwarn("{}: Transform lookup from {} to {} failed for the requested time. Using latest transform instead.".format(rospy.get_name(), msg.header.frame_id, self.world_frame))
+                transform_stamped = self.tf_buf.lookup_transform(self.world_frame, msg.header.frame_id, rospy.Time(0))
             msg = do_transform_cloud(msg, transform_stamped)                
         
         # Convert pointcloud to numpy array
         pointcloud_data = ros_numpy.numpify(msg)
         pointcloud_data = ros_numpy.point_cloud2.get_xyz_points(pointcloud_data)
         
+        # Update grid data
+        self.update_grid(pointcloud_data)
+        
         # Create occupancy grid
         self.sidewalk_occupancy_grid.header.stamp = msg.header.stamp
-        self.sidewalk_occupancy_grid.data = self.create_occupancy_grid(pointcloud_data)
+        self.sidewalk_occupancy_grid.data = self.create_occupancy_grid()
         
         # Publish occupancy grid
         self.sidewalk_occupancy_grid_pub.publish(self.sidewalk_occupancy_grid)
         
-    def create_occupancy_grid(self, pointcloud_data):
-        # Create occupancy grid array
-        occupancy_grid = np.full((self.sidewalk_occupancy_grid.info.width, self.sidewalk_occupancy_grid.info.height), self.unknown_value)
-        
+    def update_grid(self, pointcloud_data):
         # Fill occupancy grid
         for point in pointcloud_data:
             x, y, z = point
@@ -128,12 +131,13 @@ class SidewalkMapper:
             
             if self.is_in_grid(i, j):
                 if self.sidewalk_z_min <= z < self.sidewalk_z_max:
-                    occupancy_grid[i, j] = max(occupancy_grid[i, j], self.free_value)
+                    self.grid_data[i, j] = max(self.grid_data[i, j], self.free_value)
                 elif self.obstacle_z_min <= z < self.obstacle_z_max:
-                    occupancy_grid[i, j] = max(occupancy_grid[i, j], self.occupied_value)
-                
+                    self.grid_data[i, j] = max(self.grid_data[i, j], self.occupied_value)
+    
+    def create_occupancy_grid(self):
         # Flatten column-major order (Fortran-style) to match ROS OccupancyGrid
-        return occupancy_grid.flatten(order='F').tolist()   
+        return self.grid_data.flatten(order='F').tolist()
     
     def world_to_grid(self, x, y):
         # Convert world point to grid cell
