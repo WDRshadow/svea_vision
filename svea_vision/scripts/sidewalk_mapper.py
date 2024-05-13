@@ -73,13 +73,13 @@ class SidewalkMapper:
             self.sidewalk_occupancy_grid.info.origin.position.y = -self.height/2
             
             # Initialize variables
-            self.grid_data = np.full((self.sidewalk_occupancy_grid.info.width, self.sidewalk_occupancy_grid.info.height), self.unknown_value)
+            self.grid_data = np.full((self.sidewalk_occupancy_grid.info.width, self.sidewalk_occupancy_grid.info.height, 2), (self.unknown_value, 0), dtype=float)  # (x,y) => (probability, no. of observations)
             
             # Publishers
             self.sidewalk_occupancy_grid_pub = rospy.Publisher(self.sidewalk_occupancy_grid_topic, OccupancyGrid, queue_size=1)
             
             # Subscribers
-            self.sidewalk_pointcloud_sub = rospy.Subscriber(self.sidewalk_pointcloud_topic, PointCloud2, self.pointcloud_callback)
+            self.sidewalk_pointcloud_sub = rospy.Subscriber(self.sidewalk_pointcloud_topic, PointCloud2, self.pointcloud_callback, queue_size=1)
             
         except Exception as e:
             # Log error
@@ -130,14 +130,18 @@ class SidewalkMapper:
             i, j = self.world_to_grid(x, y)
             
             if self.is_in_grid(i, j):
+                old_prob, n = self.grid_data[i, j]
                 if self.sidewalk_z_min <= z < self.sidewalk_z_max:
-                    self.grid_data[i, j] = max(self.grid_data[i, j], self.free_value)
+                    new_prob = (old_prob * n + self.free_value) / (n + 1)
+                    self.grid_data[i, j] = (new_prob, n + 1)
                 elif self.obstacle_z_min <= z < self.obstacle_z_max:
-                    self.grid_data[i, j] = max(self.grid_data[i, j], self.occupied_value)
+                    new_prob = (old_prob * n + self.occupied_value) / (n + 1)
+                    self.grid_data[i, j] = (new_prob, n + 1)
     
     def create_occupancy_grid(self):
         # Flatten column-major order (Fortran-style) to match ROS OccupancyGrid
-        return self.grid_data.flatten(order='F').tolist()
+        # Refer to (https://robotics.stackexchange.com/a/66500) for a detailed explanation
+        return self.grid_data[:, :, 0].astype(int).flatten(order='F').tolist()
     
     def world_to_grid(self, x, y):
         # Convert world point to grid cell
