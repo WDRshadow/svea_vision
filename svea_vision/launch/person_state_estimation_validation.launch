@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+
+<launch>
+
+    <!-- Args -->
+    <arg name="rosbag_prefix"   default="/svea_ws/src/svea_vision/mocap_ground_truth" />
+
+    <!-- Rosbag containing pose and velocity of pedrestian. Ground truth-->
+    <node unless="$(arg record_visual)" name="rosbag" pkg="rosbag" type="record" output="screen" args="-o $(arg rosbag_prefix)
+        /...... ground truth topic
+    " />
+
+</launch>
