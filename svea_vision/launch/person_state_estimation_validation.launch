@@ -3,11 +3,19 @@
 <launch>
 
     <!-- Args -->
-    <arg name="rosbag_prefix"   default="/svea_ws/src/svea_vision/mocap_ground_truth" />
+    <arg name="rosbag_prefix"   default="/home/chunky/Projects/svea/src/svea_vision/velocity_validation"/>
 
     <!-- Rosbag containing pose and velocity of pedrestian. Ground truth-->
-    <node unless="$(arg record_visual)" name="rosbag" pkg="rosbag" type="record" output="screen" args="-o $(arg rosbag_prefix)
-        /...... ground truth topic
-    " />
+    <!-- <node name="rosbag" pkg="rosbag" type="record" output="screen" args="-o $(arg rosbag_prefix)
+        /qualisys/pedestrian/pose
+        /qualisys/pedestrian/velocity
+        /detection_splitter/persons
+        /objectmarkers
+        /person_state_estimation/person_states
+        /person_state_estimation/person_velocity 
+    " /> -->
+
+    <node name="person_state_estimation" pkg="svea_vision" type="person_state_estimation.py" output="screen"/> 
 
 </launch>
+

@@ -4,7 +4,7 @@ from collections import deque
 import numpy as np
 from math import sin, cos, atan2
 import rospy
-from geometry_msgs.msg import Pose
+from geometry_msgs.msg import Pose, Twist
 from svea_vision_msgs.msg import StampedObjectPoseArray, PersonState, PersonStateArray
 from scipy.optimize import curve_fit
 from svea_vision.kalman_filter import KF
@@ -31,6 +31,8 @@ class PersonStatePredictor:
 
     def __init__(self):
         rospy.init_node("person_state_estimation", anonymous=True)
+        # Initialize the publisher for Twist messages
+        self.twist_pub = rospy.Publisher('~person_velocity', Twist, queue_size=10)
         self.pub = rospy.Publisher("~person_states", PersonStateArray, queue_size=10)
         self.start()
 
@@ -158,6 +160,18 @@ class PersonStatePredictor:
 
                 # Update the dictionary with {ID: PersonState}
                 self.person_states[person_id] = state
+
+                # Calculate velocity components
+                twist_msg = Twist()
+                twist_msg.linear.x = v * cos(phi)
+                twist_msg.linear.y = v * sin(phi)
+                twist_msg.linear.z = 0
+                twist_msg.angular.x = 0
+                twist_msg.angular.y = 0
+                twist_msg.angular.z = 0
+
+                # Publish the Twist message
+                self.twist_pub.publish(twist_msg)
 
         # Cleanup the dictionary of person_states
         self.__clean_up_dict(msg.header.seq)
