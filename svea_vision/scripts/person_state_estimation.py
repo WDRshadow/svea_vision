@@ -77,6 +77,7 @@ class PersonStatePredictor:
 
             # Check if the new measurement is close to previous stored measurements and
             # set person_id if criteria is met.
+            print("person ID before recovery",person_id)
             person_id = self.recover_id(person_id, person_loc)
 
             # Append the current person's location in the dict
@@ -88,10 +89,12 @@ class PersonStatePredictor:
                     [person_loc], maxlen=self.MAX_HISTORY_LEN
                 )
 
+            print("person ID",person_id)
             # Estimate the state when having enough historical locations
             if len(self.person_tracker_dict[person_id]) == self.MAX_HISTORY_LEN:
                 # Get the velocity and heading for kalman filter estimation
                 v, phi = self.fit(self.person_tracker_dict[person_id])
+                print("measured v and phi:",v,phi)
 
                 # Run the Kalman filter
                 if not self.kf_dict.get(person_id):
@@ -105,6 +108,7 @@ class PersonStatePredictor:
                     )
                 else:
                     self.kf_dict[person_id].predict()
+                    print("KF prediction v and phi:",self.kf_dict[person_id].x[2],self.kf_dict[person_id].x[3])
                     z = [
                         person_loc[0],
                         person_loc[1],
@@ -112,6 +116,7 @@ class PersonStatePredictor:
                         phi,
                     ]  # measurement - actual observaation
                     self.kf_dict[person_id].update(z)
+                    print("KF update v and phi:",self.kf_dict[person_id].x[2],self.kf_dict[person_id].x[3])
 
                 kf_state = self.kf_dict[person_id].x  # Kalman filter state estimate
 
