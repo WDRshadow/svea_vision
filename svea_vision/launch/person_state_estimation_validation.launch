@@ -16,6 +16,6 @@
     " /> -->
 
     <node name="person_state_estimation" pkg="svea_vision" type="person_state_estimation.py" output="screen"/> 
-
+    <include file="$(find foxglove_bridge)/launch/foxglove_bridge.launch"/>
 </launch>
 

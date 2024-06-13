@@ -19,10 +19,10 @@ class PersonStatePredictor:
     (x, y, v, phi) by interpolating the locations up to
     MAX_HISTORY_LEN."""
 
-    FREQUENCY = 14.5
     THRESHOLD_DIST = 0.5  # TODO: Keep the same person id if the distance is not high between two measurements. Improve threshold
     MAX_HISTORY_LEN = 6  # Used for trajectory prediction
     MAX_FRAMES_ID_MISSING = 4  # drop id after certain frames
+    MAX_FRAMES_FREQUENCY_AVERAGE = 5  #average the frequency of people localization message
 
     person_tracker_dict = dict()
     person_states = dict()
@@ -31,6 +31,10 @@ class PersonStatePredictor:
 
     def __init__(self):
         rospy.init_node("person_state_estimation", anonymous=True)
+        self.last_time = None
+        self.frequency = 0
+        self.counter = 0
+        self.total_time = 0
         # Initialize the publisher for Twist messages
         self.twist_pub = rospy.Publisher('~person_velocity', Twist, queue_size=10)
         self.pub = rospy.Publisher("~person_states", PersonStateArray, queue_size=10)
@@ -58,6 +62,7 @@ class PersonStatePredictor:
         :param msg: message containing the detected persons
         :return: None"""
 
+        self.__update_frequency()
         personStateArray_msg = PersonStateArray()
         personStateArray_msg.header = msg.header
 
@@ -96,7 +101,7 @@ class PersonStatePredictor:
                         [person_loc[0], person_loc[1]],
                         v,
                         phi,
-                        self.FREQUENCY,
+                        self.frequency,
                     )
                 else:
                     self.kf_dict[person_id].predict()
@@ -193,8 +198,8 @@ class PersonStatePredictor:
         # Calculate velocity
         v = (
             np.linalg.norm(np.array([x1, y1]) - np.array([x0, y0]))
-            * self.FREQUENCY
-            / self.MAX_HISTORY_LEN  # TODO: We are using the last two poits of a path, why to use this here?
+            * self.frequency
+           # / self.MAX_HISTORY_LEN  # TODO: We are using the last two poits of a path, why to use this here?
         )
 
         # Calculate heading in radians
@@ -211,7 +216,7 @@ class PersonStatePredictor:
         :return:   A better estimation of the current velocity and heading"""
 
         time = (
-            np.linspace(0, len(trajectory), self.MAX_HISTORY_LEN) * 1 / self.FREQUENCY
+            np.linspace(0, len(trajectory), self.MAX_HISTORY_LEN) * 1 / self.frequency
         )
         x, y = np.zeros(len(trajectory)), np.zeros(len(trajectory))
 
@@ -261,6 +266,23 @@ class PersonStatePredictor:
                 id
             )  # TODO: check why not drop it from person_state_tracker?
             self.kf_dict.pop(id)  # TODO: check why not drop it from kf_state_tracker?
+
+    def __update_frequency(self):
+        """
+        Function used to update the frequency of the message received on "/detection_splitter/persons".
+        The frequancy computation is done when MAX_FRAMES_FREQUENCY_AVERAGE messages are received to filter undesired fluctuations.
+        """
+        current_time = rospy.Time.now()
+        self.counter += 1
+        if self.last_time is not None:
+            time_diff = (current_time - self.last_time).to_sec()
+            self.total_time+=time_diff
+            if self.counter == self.MAX_FRAMES_FREQUENCY_AVERAGE:
+                self.frequency = self.MAX_FRAMES_FREQUENCY_AVERAGE / self.total_time
+                print(self.frequency)
+                self.counter = 0
+                self.total_time = 0
+        self.last_time = current_time
 
     def start(self):
         self.__listener()
