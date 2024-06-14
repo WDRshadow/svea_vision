@@ -5,6 +5,7 @@ import numpy as np
 from math import sin, cos, atan2
 import rospy
 from geometry_msgs.msg import Pose, Twist
+from std_msgs.msg import Float64
 from svea_vision_msgs.msg import StampedObjectPoseArray, PersonState, PersonStateArray
 from scipy.optimize import curve_fit
 from svea_vision.kalman_filter import KF
@@ -20,14 +21,14 @@ class PersonStatePredictor:
     MAX_HISTORY_LEN."""
 
     THRESHOLD_DIST = 0.5  # TODO: Keep the same person id if the distance is not high between two measurements. Improve threshold
-    MAX_HISTORY_LEN = 6  # Used for trajectory prediction
+    MAX_HISTORY_LEN = 10  # Used for trajectory prediction and average the frequency of people localization message
     MAX_FRAMES_ID_MISSING = 4  # drop id after certain frames
-    MAX_FRAMES_FREQUENCY_AVERAGE = 5  #average the frequency of people localization message
 
     person_tracker_dict = dict()
     person_states = dict()
     kf_dict = dict()
     kf_state_tracker = dict()
+    time_deque = deque([0],MAX_HISTORY_LEN)
 
     def __init__(self):
         rospy.init_node("person_state_estimation", anonymous=True)
@@ -36,8 +37,9 @@ class PersonStatePredictor:
         self.counter = 0
         self.total_time = 0
         # Initialize the publisher for Twist messages
-        self.twist_pub = rospy.Publisher('~person_velocity', Twist, queue_size=10)
-        self.pub = rospy.Publisher("~person_states", PersonStateArray, queue_size=10)
+        self.pub_fit_default = rospy.Publisher('~float_variable_fit_default', Float64, queue_size=10)
+        self.pub_fit_new = rospy.Publisher('~float_variable_fit_new', Float64, queue_size=10)
+        self.pub_kf = rospy.Publisher("~person_states_kf", PersonStateArray, queue_size=10)
         self.start()
 
     def __listener(self):
@@ -62,7 +64,7 @@ class PersonStatePredictor:
         :param msg: message containing the detected persons
         :return: None"""
 
-        self.__update_frequency()
+        self.__update_frequency(msg)
         personStateArray_msg = PersonStateArray()
         personStateArray_msg.header = msg.header
 
@@ -77,7 +79,6 @@ class PersonStatePredictor:
 
             # Check if the new measurement is close to previous stored measurements and
             # set person_id if criteria is met.
-            print("person ID before recovery",person_id)
             person_id = self.recover_id(person_id, person_loc)
 
             # Append the current person's location in the dict
@@ -89,12 +90,14 @@ class PersonStatePredictor:
                     [person_loc], maxlen=self.MAX_HISTORY_LEN
                 )
 
-            print("person ID",person_id)
             # Estimate the state when having enough historical locations
             if len(self.person_tracker_dict[person_id]) == self.MAX_HISTORY_LEN:
                 # Get the velocity and heading for kalman filter estimation
                 v, phi = self.fit(self.person_tracker_dict[person_id])
-                print("measured v and phi:",v,phi)
+                self.pub_fit_default.publish(v*sin(phi))
+
+                vx,vy,ax,ay = self.fit2(self.person_tracker_dict[person_id])
+                self.pub_fit_new.publish(vy)
 
                 # Run the Kalman filter
                 if not self.kf_dict.get(person_id):
@@ -108,7 +111,6 @@ class PersonStatePredictor:
                     )
                 else:
                     self.kf_dict[person_id].predict()
-                    print("KF prediction v and phi:",self.kf_dict[person_id].x[2],self.kf_dict[person_id].x[3])
                     z = [
                         person_loc[0],
                         person_loc[1],
@@ -116,7 +118,6 @@ class PersonStatePredictor:
                         phi,
                     ]  # measurement - actual observaation
                     self.kf_dict[person_id].update(z)
-                    print("KF update v and phi:",self.kf_dict[person_id].x[2],self.kf_dict[person_id].x[3])
 
                 kf_state = self.kf_dict[person_id].x  # Kalman filter state estimate
 
@@ -164,31 +165,21 @@ class PersonStatePredictor:
 
                 state.id = person_id
                 state.pose = pose  # position and orientation
-                state.velocity = v
-                state.direction = phi
+                state.vx = v * cos(phi)
+                state.vy = v * sin(phi)
+                state.ax = 0
+                state.ay = 0
                 state.counter = msg.header.seq
 
                 # Update the dictionary with {ID: PersonState}
                 self.person_states[person_id] = state
-
-                # Calculate velocity components
-                twist_msg = Twist()
-                twist_msg.linear.x = v * cos(phi)
-                twist_msg.linear.y = v * sin(phi)
-                twist_msg.linear.z = 0
-                twist_msg.angular.x = 0
-                twist_msg.angular.y = 0
-                twist_msg.angular.z = 0
-
-                # Publish the Twist message
-                self.twist_pub.publish(twist_msg)
 
         # Cleanup the dictionary of person_states
         self.__clean_up_dict(msg.header.seq)
 
         # Put the list of personstate in the message and publish it
         personStateArray_msg.personstate = list(self.person_states.values())
-        self.pub.publish(personStateArray_msg)
+        self.pub_kf.publish(personStateArray_msg)
 
     def __calculate_velocity_heading(self, c0, c1):
         """Coordinate interpolation
@@ -203,7 +194,7 @@ class PersonStatePredictor:
         # Calculate velocity
         v = (
             np.linalg.norm(np.array([x1, y1]) - np.array([x0, y0]))
-            * self.frequency
+            / (self.time_deque[-1]-self.time_deque[-2])
            # / self.MAX_HISTORY_LEN  # TODO: We are using the last two poits of a path, why to use this here?
         )
 
@@ -211,6 +202,24 @@ class PersonStatePredictor:
         phi = atan2(y1 - y0, x1 - x0)
 
         return float(v), float(phi)
+
+    def compute_velocity_acceleration(self,time, xs, ys):
+        # Calculate time differences
+        dt = np.diff(time)
+        
+        vx = np.diff(xs) / dt
+        vy = np.diff(ys) / dt
+        # velocity of the moving pedestrian
+        vx_current = (xs[-1] - xs[-self.MAX_HISTORY_LEN]) / (time[-1])
+        vy_current = (ys[-1] - ys[-self.MAX_HISTORY_LEN]) /(time[-1])
+        
+        ax = np.diff(vx) / dt[:-1]
+        ay = np.diff(vy) / dt[:-1]
+        # acceleration of the moving pedestrian
+        ax_current = (vx[-1] - vx[-5]) / 4/dt[-1]
+        ay_current = (vy[-1] - vy[-5]) / 4/dt[-1]
+        
+        return vx_current, vy_current, ax_current, ay_current
 
     def fit(self, trajectory: deque):
         """Fit the trajectory of the previous positions in order to get a
@@ -220,14 +229,13 @@ class PersonStatePredictor:
         :param trajectory:   queue of locations
         :return:   A better estimation of the current velocity and heading"""
 
-        time = (
-            np.linspace(0, len(trajectory), self.MAX_HISTORY_LEN) * 1 / self.frequency
-        )
         x, y = np.zeros(len(trajectory)), np.zeros(len(trajectory))
 
         for i, path in enumerate(trajectory):
             x[i], y[i] = path[0], path[1]
 
+        time = np.array(self.time_deque)
+        time-=min(time)
         popt_x, *_ = curve_fit(quadratic_func, time, x)
         popt_y, *_ = curve_fit(quadratic_func, time, y)
         ax, bx, cx = popt_x
@@ -236,8 +244,25 @@ class PersonStatePredictor:
         xs = quadratic_func(time, ax, bx, cx)  # TODO: maybe use next timestep?
         ys = quadratic_func(time, ay, by, cy)
         c0, c1 = (xs[-2], ys[-2]), (xs[-1], ys[-1])
+        return self.__calculate_velocity_heading(c0,c1)
 
-        return self.__calculate_velocity_heading(c0, c1)
+    def fit2(self, trajectory: deque):
+        """Fit the trajectory of the previous positions in order to get a
+        better estimate of current velocity and heading. First estimate trajectory values
+        through curve fitting, and then calculate velocity and heading.
+
+        :param trajectory:   queue of locations
+        :return:   A better estimation of the current velocity and heading"""
+
+        time = np.array(self.time_deque)
+        time-=min(time)
+        x, y = np.zeros(len(trajectory)), np.zeros(len(trajectory))
+
+        for i, path in enumerate(trajectory):
+            x[i], y[i] = path[0], path[1]
+
+
+        return self.compute_velocity_acceleration(time,x,y)
 
     def recover_id(self, person_id, person_loc):
         # TODO: Fix this.
@@ -272,19 +297,19 @@ class PersonStatePredictor:
             )  # TODO: check why not drop it from person_state_tracker?
             self.kf_dict.pop(id)  # TODO: check why not drop it from kf_state_tracker?
 
-    def __update_frequency(self):
+    def __update_frequency(self,msg:StampedObjectPoseArray):
         """
         Function used to update the frequency of the message received on "/detection_splitter/persons".
-        The frequancy computation is done when MAX_FRAMES_FREQUENCY_AVERAGE messages are received to filter undesired fluctuations.
+        The frequency computation is done when MAX_HISTORY_LEN messages are received to filter undesired fluctuations.
         """
-        current_time = rospy.Time.now()
+        current_time = msg.header.stamp.secs + msg.header.stamp.nsecs/1e9
         self.counter += 1
         if self.last_time is not None:
-            time_diff = (current_time - self.last_time).to_sec()
+            time_diff = (current_time - self.last_time)
             self.total_time+=time_diff
-            if self.counter == self.MAX_FRAMES_FREQUENCY_AVERAGE:
-                self.frequency = self.MAX_FRAMES_FREQUENCY_AVERAGE / self.total_time
-                print(self.frequency)
+            self.time_deque.append(self.time_deque[-1] + time_diff)
+            if self.counter == self.MAX_HISTORY_LEN:
+                self.frequency = self.MAX_HISTORY_LEN / self.total_time
                 self.counter = 0
                 self.total_time = 0
         self.last_time = current_time
