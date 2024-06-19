@@ -17,7 +17,7 @@
     " /> -->
 
     <node name="pedestrian_flow_estimate" pkg="svea_vision" type="pedestrian_flow_estimate.py" output="screen"/> 
-    <!-- <node name="person_state_estimation" pkg="svea_vision" type="person_state_estimation.py" output="screen"/>  -->
+    <node name="person_state_estimation" pkg="svea_vision" type="person_state_estimation.py" output="screen"/> 
 
 </launch>
 
