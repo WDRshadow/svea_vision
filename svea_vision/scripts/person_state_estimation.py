@@ -23,12 +23,15 @@ class PersonStatePredictor:
     THRESHOLD_DIST = 0.5  # TODO: Keep the same person id if the distance is not high between two measurements. Improve threshold
     MAX_HISTORY_LEN = 10  # Used for trajectory prediction and average the frequency of people localization message
     MAX_FRAMES_ID_MISSING = 4  # drop id after certain frames
+    SPEED_ACCELERATION_LENGTH = 20
+    FREQUENCY_VEL = 10
+    FREQUENCY_ACC = 15
 
     person_tracker_dict = dict()
     person_states = dict()
     kf_dict = dict()
     kf_state_tracker = dict()
-    time_deque = deque([0],MAX_HISTORY_LEN)
+
 
     def __init__(self):
         rospy.init_node("person_state_estimation", anonymous=True)
@@ -36,7 +39,14 @@ class PersonStatePredictor:
         self.frequency = 0
         self.counter = 0
         self.total_time = 0
-        # Initialize the publisher for Twist messages
+        self.time_deque = deque([0],self.MAX_HISTORY_LEN)
+        self.vy = deque([0],self.SPEED_ACCELERATION_LENGTH)
+        self.vy_smoothed = deque([0],self.SPEED_ACCELERATION_LENGTH)
+        self.vx = deque([0],self.SPEED_ACCELERATION_LENGTH)
+        self.vx_smoothed = deque([0],self.SPEED_ACCELERATION_LENGTH)
+        self.ay = deque([0],self.SPEED_ACCELERATION_LENGTH)
+        self.ax = deque([0],self.SPEED_ACCELERATION_LENGTH)
+
         self.pub_fit_default = rospy.Publisher('~float_variable_fit_default', Float64, queue_size=10)
         self.pub_fit_new = rospy.Publisher('~float_variable_fit_new', Float64, queue_size=10)
         self.pub_kf = rospy.Publisher("~person_states_kf", PersonStateArray, queue_size=10)
@@ -90,15 +100,21 @@ class PersonStatePredictor:
                     [person_loc], maxlen=self.MAX_HISTORY_LEN
                 )
 
+            # estimate speed and acceleration of person_id pedestrian
+            x, y = np.zeros(len(self.person_tracker_dict[person_id])), np.zeros(len(self.person_tracker_dict[person_id]))
+            for i, path in enumerate(self.person_tracker_dict[person_id]):
+                x[i], y[i] = path[0], path[1]
+            vx,vy,ax,ay = self.smoothed_velocity_acceleration(x,y)
+
+            # publish estimates
+            self.pub_fit_new.publish(vy)
+            self.pub_fit_default.publish(ay)
+
             # Estimate the state when having enough historical locations
             if len(self.person_tracker_dict[person_id]) == self.MAX_HISTORY_LEN:
                 # Get the velocity and heading for kalman filter estimation
                 v, phi = self.fit(self.person_tracker_dict[person_id])
                 self.pub_fit_default.publish(v*sin(phi))
-
-                vx,vy,ax,ay = self.fit2(self.person_tracker_dict[person_id])
-                self.pub_fit_new.publish(vy)
-
                 # Run the Kalman filter
                 if not self.kf_dict.get(person_id):
                     # initial position, velocity and heading
@@ -203,23 +219,37 @@ class PersonStatePredictor:
 
         return float(v), float(phi)
 
-    def compute_velocity_acceleration(self,time, xs, ys):
-        # Calculate time differences
-        dt = np.diff(time)
-        
-        vx = np.diff(xs) / dt
-        vy = np.diff(ys) / dt
-        # velocity of the moving pedestrian
-        vx_current = (xs[-1] - xs[-self.MAX_HISTORY_LEN]) / (time[-1])
-        vy_current = (ys[-1] - ys[-self.MAX_HISTORY_LEN]) /(time[-1])
-        
-        ax = np.diff(vx) / dt[:-1]
-        ay = np.diff(vy) / dt[:-1]
-        # acceleration of the moving pedestrian
-        ax_current = (vx[-1] - vx[-5]) / 4/dt[-1]
-        ay_current = (vy[-1] - vy[-5]) / 4/dt[-1]
-        
-        return vx_current, vy_current, ax_current, ay_current
+
+    def low_pass_filter(self, data, frequency):
+        if len(data) < frequency:
+            raise ValueError("The length of the data must be at least equal to the frequency.")
+        window_sum = np.sum(list(data)[-frequency:])
+        moving_average = window_sum / frequency
+        return moving_average
+
+    def smoothed_velocity_acceleration(self, xs, ys):
+        vy = (ys[-1]-ys[-2])/(self.time_deque[-1]-self.time_deque[-2])
+        self.vy.append(vy) 
+        vx = (xs[-1]-xs[-2])/(self.time_deque[-1]-self.time_deque[-2])
+        self.vx.append(vx)
+
+        if len(self.vy) >= self.FREQUENCY_VEL:
+            smoothed_vy = self.low_pass_filter(self.vy, self.FREQUENCY_VEL)
+            self.vy_smoothed.append(smoothed_vy)
+            smoothed_vx = self.low_pass_filter(self.vx, self.FREQUENCY_VEL)
+            self.vx_smoothed.append(smoothed_vx)
+
+            ay = (self.vy_smoothed[-1]-self.vy_smoothed[-2])/(self.time_deque[-1]-self.time_deque[-2])
+            self.ay.append(ay)
+            ax = (self.vx_smoothed[-1]-self.vx_smoothed[-2])/(self.time_deque[-1]-self.time_deque[-2])
+            self.ax.append(ax)
+
+        if len(self.ay) >= self.FREQUENCY_ACC: 
+            smoothed_ay = self.low_pass_filter(self.ay,self.FREQUENCY_ACC)
+            smoothed_ax = self.low_pass_filter(self.ax,self.FREQUENCY_ACC)
+
+
+        return smoothed_vx, smoothed_vy, smoothed_ax, smoothed_ay
 
     def fit(self, trajectory: deque):
         """Fit the trajectory of the previous positions in order to get a
@@ -253,16 +283,12 @@ class PersonStatePredictor:
 
         :param trajectory:   queue of locations
         :return:   A better estimation of the current velocity and heading"""
-
-        time = np.array(self.time_deque)
-        time-=min(time)
         x, y = np.zeros(len(trajectory)), np.zeros(len(trajectory))
 
         for i, path in enumerate(trajectory):
             x[i], y[i] = path[0], path[1]
 
-
-        return self.compute_velocity_acceleration(time,x,y)
+        return self.smoothed_velocity_acceleration(x,y)
 
     def recover_id(self, person_id, person_loc):
         # TODO: Fix this.
