@@ -15,7 +15,7 @@ class PedestrianFlowEstimator:
     """Class that estimates the speed and acceleration of detected peaple through moving average filtering."""
 
     THRESHOLD_DIST = 0.5            # TODO: Keep the same person id if the distance is not high between two measurements. Improve threshold
-    MAX_HISTORY_LEN = 10            # Used for pose_deque and time_deque dimension.
+    MAX_HISTORY_LEN = 4             # Used for pose_deque and time_deque dimension.
     MAX_FRAMES_ID_MISSING = 4       # drop id after certain frames
     SPEED_ACCELERATION_LENGTH = 20  # buffer dimension of speed and acceleration deques
     FREQUENCY_VEL = 10              # Velocity filter frequency
@@ -88,15 +88,11 @@ class PedestrianFlowEstimator:
                 )
 
             # estimate speed and acceleration of person_id pedestrian
-            x, y = np.zeros(len(self.person_tracker_dict[person_id])), np.zeros(len(self.person_tracker_dict[person_id]))
-            for i, path in enumerate(self.person_tracker_dict[person_id]):
-                x[i], y[i] = path[0], path[1]
+            vx,vy,ax,ay = self.smoothed_velocity_acceleration(person_id)
 
-            vx,vy,ax,ay = self.smoothed_velocity_acceleration(x,y)
-
-            # publish estimates
-            self.pub1.publish(vy)
-            self.pub2.publish(ay)
+            # publish raw y and estimated vy as floats. These are used for easier real-time debugging on the svea through foxglove.
+            self.pub1.publish(person_loc[1])
+            self.pub2.publish(vy)
 
             state = PersonState()
             pose = Pose()
@@ -108,7 +104,7 @@ class PedestrianFlowEstimator:
                 )
 
             state.id = person_id
-            state.pose = pose  # position
+            state.pose = pose  # position. No orientation
             state.vx = vx
             state.vy = vy
             state.ax = ax
@@ -134,9 +130,13 @@ class PedestrianFlowEstimator:
         moving_average = window_sum / frequency
         return moving_average
 
-    def smoothed_velocity_acceleration(self, xs, ys):
+    def smoothed_velocity_acceleration(self, person_id):
 
         smoothed_vx, smoothed_vy, smoothed_ax, smoothed_ay = 0,0,0,0
+        
+        coords_deque = self.person_tracker_dict[person_id]
+        xs = [coords[0] for coords in coords_deque]
+        ys = [coords[1] for coords in coords_deque]
 
         if len(self.time_deque) >= 2 and len(ys)>=2 :
             vy = (ys[-1]-ys[-2])/(self.time_deque[-1]-self.time_deque[-2])
