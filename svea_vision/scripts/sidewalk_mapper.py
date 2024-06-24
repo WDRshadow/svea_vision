@@ -7,11 +7,11 @@ import message_filters as mf
 from tf2_sensor_msgs.tf2_sensor_msgs import do_transform_cloud
 from sensor_msgs.msg import PointCloud2
 from nav_msgs.msg import OccupancyGrid
+from geometry_msgs.msg import PoseStamped
 
 import time
 import numpy as np
-import open3d as o3d
-import open3d.t.pipelines.registration as o3d_reg
+import numba as nb
 
 np.float = float    # NOTE: Temporary fix for ros_numpy issue; check #39
 import ros_numpy
@@ -31,13 +31,6 @@ def replace_base(old, new) -> str:
     ns += new.split('/')
     return '/'.join(ns)
 
-# Example callback_after_iteration lambda function:
-callback_after_iteration = lambda updated_result_dict : print("Iteration Index: {}, Fitness: {}, Inlier RMSE: {},".format(
-    updated_result_dict["iteration_index"].item(),
-    updated_result_dict["fitness"].item(),
-    updated_result_dict["inlier_rmse"].item()))
-
-
 class SidewalkMapper:
     
     def __init__(self):
@@ -49,6 +42,7 @@ class SidewalkMapper:
             self.raw_pointcloud_topic = load_param('~raw_pointcloud_topic', '/zed/zed_node/point_cloud/cloud_registered')
             self.sidewalk_pointcloud_topic = load_param('~sidewalk_pointcloud_topic', 'sidewalk_pointcloud')
             self.sidewalk_occupancy_grid_topic = load_param('~sidewalk_occupancy_grid_topic', 'sidewalk_occupancy_grid')
+            self.filtered_pose_topic = load_param('~filtered_pose_topic', '/zed/zed_node/pose')
             
             # Sidewalk parameters
             self.sidewalk_z_min = load_param('~sidewalk_z_min', -0.5)
@@ -65,9 +59,6 @@ class SidewalkMapper:
             self.occupied_value = load_param('~occupied_value', 100)
             self.free_value = load_param('~free_value', 0)
             self.unknown_value = load_param('~unknown_value', -1)
-            
-            # Other parameters
-            self.use_cuda = load_param('~use_cuda', False)
             
             # Check parameters sanity
             if not self.world_frame:
@@ -100,7 +91,8 @@ class SidewalkMapper:
             # Subscribers
             self.ts = mf.TimeSynchronizer([
                 mf.Subscriber(self.raw_pointcloud_topic, PointCloud2, queue_size=100),
-                mf.Subscriber(self.sidewalk_pointcloud_topic, PointCloud2, queue_size=100)
+                mf.Subscriber(self.sidewalk_pointcloud_topic, PointCloud2, queue_size=100),
+                mf.Subscriber(self.filtered_pose_topic, PoseStamped, queue_size=100)
             ], 100)
             self.ts.registerCallback(self.callback)
             
@@ -119,7 +111,18 @@ class SidewalkMapper:
         except rospy.ROSInterruptException:
             rospy.loginfo("{}: ROS Interrupted, shutting down...".format(rospy.get_name()))
             
-    def callback(self, raw_pc_msg, sidewalk_pc_msg):
+    def callback(self, raw_pc_msg, sidewalk_pc_msg, filtered_pose_msg):
+        start = time.time()
+        # Convert PoseStamped message to TransformStamped message
+        transform_stamped = tf2_ros.TransformStamped()
+        transform_stamped.header.stamp = filtered_pose_msg.header.stamp
+        transform_stamped.transform.translation = filtered_pose_msg.pose.position
+        transform_stamped.transform.rotation = filtered_pose_msg.pose.orientation
+
+        # Transform pointclouds
+        raw_pc_msg = do_transform_cloud(raw_pc_msg, transform_stamped)
+        sidewalk_pc_msg = do_transform_cloud(sidewalk_pc_msg, transform_stamped)
+            
         # Convert ROS PointCloud2 message to numpy array
         raw_pointcloud_data = ros_numpy.numpify(raw_pc_msg)
         raw_pointcloud_data = ros_numpy.point_cloud2.get_xyz_points(raw_pointcloud_data, remove_nans=False)
@@ -127,118 +130,20 @@ class SidewalkMapper:
         sidewalk_pointcloud_data = ros_numpy.numpify(sidewalk_pc_msg)
         sidewalk_pointcloud_data = ros_numpy.point_cloud2.get_xyz_points(sidewalk_pointcloud_data, remove_nans=False)
         
-        # Convert numpy array to Open3D pointcloud tensor
-        raw_pointcloud_tensor = o3d.t.geometry.PointCloud(raw_pointcloud_data.reshape(-1, 3))
-        sidewalk_pointcloud_tensor = o3d.t.geometry.PointCloud(sidewalk_pointcloud_data.reshape(-1, 3))
+        # Update occupancy grid
+        self.update_grid(raw_pointcloud_data, sidewalk_pointcloud_data)
         
-        # Move pointcloud to device
-        if self.use_cuda:
-            raw_pointcloud_tensor.cuda()
-            sidewalk_pointcloud_tensor.cuda()
-            
-        # Compute normal vectors
-        raw_pointcloud_tensor.estimate_normals(max_nn=30, radius=0.1)
-        sidewalk_pointcloud_tensor.estimate_normals(max_nn=30, radius=0.1)
+        # Create occupancy grid
+        self.sidewalk_occupancy_grid.header.stamp = sidewalk_pc_msg.header.stamp
+        self.sidewalk_occupancy_grid.data = self.create_occupancy_grid()
         
-        # Get the transform from world frame to the pointcloud frame
-        if raw_pc_msg.header.frame_id == self.world_frame:
-            transformation = o3d.core.Tensor.eye(4, o3d.core.Dtype.Float32)
-        else:
-            try:
-                transform_stamped = self.tf_buf.lookup_transform(self.world_frame, raw_pc_msg.header.frame_id, raw_pc_msg.header.stamp)
-            except tf2_ros.LookupException:
-                rospy.logwarn("{}: Transform lookup from {} to {} failed for the requested time. Using latest transform instead.".format(rospy.get_name(), raw_pc_msg.header.frame_id, self.world_frame))
-                transform_stamped = self.tf_buf.lookup_transform(self.world_frame, raw_pc_msg.header.frame_id, rospy.Time(0))
-            quaternion_matrix = tr.quaternion_matrix([
-                transform_stamped.transform.rotation.x,
-                transform_stamped.transform.rotation.y,
-                transform_stamped.transform.rotation.z,
-                transform_stamped.transform.rotation.w
-                ])
-            translation_matrix = tr.translation_matrix([
-                transform_stamped.transform.translation.x,
-                transform_stamped.transform.translation.y,
-                transform_stamped.transform.translation.z
-                ])
-            transformation = o3d.core.Tensor(tr.concatenate_matrices(translation_matrix, quaternion_matrix))
-            
-        if self.raw_pointcloud_tensor_prev is None:
-            # Store previous tensors
-            self.raw_pointcloud_tensor_prev = raw_pointcloud_tensor
-            self.sidewalk_pointcloud_tensor_prev = sidewalk_pointcloud_tensor
-            self.transformation = transformation
-            
-            # Print transformations
-            print("Transformation: ", self.transformation)
-            
-        else:
-            # ICP registration
-            transformation_icp = self.icp_registration(raw_pointcloud_tensor, self.raw_pointcloud_tensor_prev)
-            # transformation_icp = self.icp_registration(sidewalk_pointcloud_tensor, self.sidewalk_pointcloud_tensor_prev)
-            
-            # Update previous tensors
-            self.raw_pointcloud_tensor_prev = raw_pointcloud_tensor
-            self.sidewalk_pointcloud_tensor_prev = sidewalk_pointcloud_tensor
-            self.transformation = self.transformation.matmul(transformation_icp)
-            
-            # Transform pointclouds
-            raw_pointcloud_tensor.transform(transformation_icp)
-            sidewalk_pointcloud_tensor.transform(transformation_icp)
-            
-            # Convert Open3D pointcloud tensor to numpy array
-            raw_pointcloud_data = raw_pointcloud_tensor.point.positions.cpu().numpy()
-            sidewalk_pointcloud_data = sidewalk_pointcloud_tensor.point.positions.cpu().numpy()
-            
-            # Update occupancy grid
-            self.update_grid(raw_pointcloud_data, sidewalk_pointcloud_data)
-            
-            # Create occupancy grid
-            self.sidewalk_occupancy_grid.header.stamp = sidewalk_pc_msg.header.stamp
-            self.sidewalk_occupancy_grid.data = self.create_occupancy_grid()
-            
-            # Publish occupancy grid
-            self.sidewalk_occupancy_grid_pub.publish(self.sidewalk_occupancy_grid)  
-            
-            # Print transformations
-            print("Transformation ICP: ", transformation_icp)
-            print("Transformation: ", self.transformation)
-                    
-    def icp_registration(self, source, target):
-        max_correspondence_distances = o3d.utility.DoubleVector([0.3, 0.14, 0.07])
-        init_transformation = o3d.core.Tensor.eye(4, o3d.core.Dtype.Float32)
-        estimation_method = o3d_reg.TransformationEstimationPointToPlane()
-        criteria_list = [
-            o3d_reg.ICPConvergenceCriteria(relative_fitness=0.0001,
-                                        relative_rmse=0.0001,
-                                        max_iteration=25),
-            o3d_reg.ICPConvergenceCriteria(0.00001, 0.00001, 15),
-            o3d_reg.ICPConvergenceCriteria(0.000001, 0.000001, 10)
-        ]
-        voxel_sizes = o3d.utility.DoubleVector([0.1, 0.05, 0.025])
-        s = time.time()
-        icp_result = o3d_reg.multi_scale_icp(source, target, voxel_sizes, criteria_list, max_correspondence_distances, init_transformation, estimation_method)
-        icp_time = time.time() - s
-        print("Time taken by ICP: ", icp_time)
-        print("Inlier Fitness: ", icp_result.fitness)
-        print("Inlier RMSE: ", icp_result.inlier_rmse)
+        # Publish occupancy grid
+        self.sidewalk_occupancy_grid_pub.publish(self.sidewalk_occupancy_grid)  
+        end = time.time()
+        
+        rospy.loginfo(f"Time taken: {end - start:.2f} sec")
 
-        return icp_result.transformation
-    
-    # def icp_registration(self, source, target):
-    #     max_correspondence_distance = 1.0
-    #     init_transformation = np.eye(4)
-    #     estimation_method = o3d_reg.TransformationEstimationPointToPlane()
-    #     criteria = o3d_reg.ICPConvergenceCriteria(max_iteration=50)
-    #     voxel_size = 0.025
-    #     s = time.time()
-    #     icp_result = o3d_reg.icp(source, target, max_correspondence_distance, init_transformation, estimation_method, criteria, voxel_size, callback_after_iteration)
-    #     icp_time = time.time() - s
-    #     print("Time taken by ICP: ", icp_time)
-    #     print("Inlier Fitness: ", icp_result.fitness)
-    #     print("Inlier RMSE: ", icp_result.inlier_rmse)
-
-    #     return icp_result.transformation
-        
+    @nb.jit
     def update_grid(self, raw_pointcloud_data, sidewalk_pointcloud_data):
         # Separate non-sidewalk and sidewalk pointclouds
         non_sidewalk_mask = np.isnan(sidewalk_pointcloud_data).any(axis=1)
