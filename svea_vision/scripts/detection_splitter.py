@@ -43,7 +43,7 @@ class DataSplitting:
 
         persons_msg.header, persons_msg.objects = msg.header, persons
         vehicle_msg.header, vehicle_msg.objects = msg.header, vehicles
-        other_msg.header, vehicle_msg = msg.header, other
+        other_msg.header, other_msg.objects = msg.header, other
 
         if persons:
             self.person_pub.publish(persons_msg)

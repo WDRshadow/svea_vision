@@ -138,7 +138,7 @@ class PedestrianFlowEstimator:
 
         smoothed_vx, smoothed_vy, smoothed_ax, smoothed_ay = 0,0,0,0
 
-        if len(self.time_deque) >= 2:
+        if len(self.time_deque) >= 2 and len(ys)>=2 :
             vy = (ys[-1]-ys[-2])/(self.time_deque[-1]-self.time_deque[-2])
             self.vy.append(vy) 
             vx = (xs[-1]-xs[-2])/(self.time_deque[-1]-self.time_deque[-2])
