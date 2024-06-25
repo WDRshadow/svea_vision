@@ -4,10 +4,9 @@ import rospy
 import tf2_ros
 import tf.transformations as tr
 import message_filters as mf
-from tf2_sensor_msgs.tf2_sensor_msgs import do_transform_cloud
 from sensor_msgs.msg import PointCloud2
 from nav_msgs.msg import OccupancyGrid
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, Transform
 
 import time
 import numpy as np
@@ -30,6 +29,13 @@ def replace_base(old, new) -> str:
     ns, _ = split_last(old.split('/'))
     ns += new.split('/')
     return '/'.join(ns)
+
+def transform_pointcloud(pointcloud, transform):
+    rotation_matrix = tr.quaternion_matrix([transform.rotation.x, transform.rotation.y, transform.rotation.z, transform.rotation.w])[:3, :3]
+    translation = np.array([transform.translation.x, transform.translation.y, transform.translation.z])
+    pointcloud = np.dot(rotation_matrix, pointcloud.T).T + translation
+    return pointcloud
+
 
 class SidewalkMapper:
     
@@ -114,16 +120,10 @@ class SidewalkMapper:
     def callback(self, raw_pc_msg, sidewalk_pc_msg, filtered_pose_msg):
         start = time.time()
         # Convert PoseStamped message to TransformStamped message
-        transform_stamped = tf2_ros.TransformStamped()
-        transform_stamped.header.stamp = filtered_pose_msg.header.stamp
-        transform_stamped.transform.translation = filtered_pose_msg.pose.position
-        transform_stamped.transform.rotation = filtered_pose_msg.pose.orientation
+        transform = Transform()
+        transform.translation = filtered_pose_msg.pose.position
+        transform.rotation = filtered_pose_msg.pose.orientation
         convert_time = time.time()
-        
-        # Transform pointclouds
-        raw_pc_msg = do_transform_cloud(raw_pc_msg, transform_stamped)
-        sidewalk_pc_msg = do_transform_cloud(sidewalk_pc_msg, transform_stamped)
-        transform_time = time.time()
         
         # Convert ROS PointCloud2 message to numpy array
         raw_pointcloud_data = ros_numpy.numpify(raw_pc_msg)
@@ -131,7 +131,16 @@ class SidewalkMapper:
         
         sidewalk_pointcloud_data = ros_numpy.numpify(sidewalk_pc_msg)
         sidewalk_pointcloud_data = ros_numpy.point_cloud2.get_xyz_points(sidewalk_pointcloud_data, remove_nans=False)
+        
+        # Flatten pointcloud data
+        raw_pointcloud_data = raw_pointcloud_data.reshape(-1, 3)
+        sidewalk_pointcloud_data = sidewalk_pointcloud_data.reshape(-1, 3)
         convert_numpy_time = time.time()
+        
+        # Transform pointclouds
+        raw_pointcloud_data = transform_pointcloud(raw_pointcloud_data, transform)
+        sidewalk_pointcloud_data = transform_pointcloud(sidewalk_pointcloud_data, transform)
+        transform_time = time.time()
         
         # Update occupancy grid
         self.update_grid(raw_pointcloud_data, sidewalk_pointcloud_data)
@@ -145,7 +154,7 @@ class SidewalkMapper:
         self.sidewalk_occupancy_grid_pub.publish(self.sidewalk_occupancy_grid)
         end = time.time()
         
-        rospy.loginfo("Convert time: {:.3f} s, Transform time: {:.3f} s, Convert numpy time: {:.3f} s, Update time: {:.3f} s, Publish time: {:.3f} s, Total time: {:.3f} s".format(convert_time-start, transform_time-convert_time, convert_numpy_time-transform_time, update_time-convert_numpy_time, end-update_time, end-start))
+        rospy.loginfo("Convert time: {:.3f} s, Convert numpy time: {:.3f} s, Transform time: {:.3f} s, Update time: {:.3f} s, Publish time: {:.3f} s, Total time: {:.3f} s".format(convert_time-start, convert_numpy_time-convert_time, transform_time-convert_numpy_time, update_time-transform_time, end-update_time, end-start))
 
     def update_grid(self, raw_pointcloud_data, sidewalk_pointcloud_data):
         # Separate non-sidewalk and sidewalk pointclouds
