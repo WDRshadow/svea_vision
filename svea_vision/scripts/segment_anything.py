@@ -134,7 +134,7 @@ class SegmentAnything:
                 ], queue_size=1)
                 self.ts.registerCallback(self.callback)
             else:
-                self.rgb_sub = rospy.Subscriber(self.rgb_topic, Image, self.callback)
+                self.rgb_sub = rospy.Subscriber(self.rgb_topic, Image, self.callback, queue_size=1, buff_size=2**24)
             
             # Logging dictionary
             self.log_times = {}
@@ -306,6 +306,7 @@ class SegmentAnything:
         # Publish segmented mask
         if self.publish_mask:
             segmented_mask_msg = self.cv_bridge.cv2_to_imgmsg(segmented_mask, encoding='mono8')
+            segmented_mask_msg.header = img_msg.header
             self.segmented_mask_pub.publish(segmented_mask_msg)
         
         # Publish segmented image
@@ -318,6 +319,7 @@ class SegmentAnything:
             if self.prompt_type=='bbox' or self.prompt_type=='text':
                 cv2.rectangle(segmented_image, (self.bbox[0], self.bbox[1]), (self.bbox[2], self.bbox[3]), (0,255,0), 2)        
             segmented_image_msg = self.cv_bridge.cv2_to_imgmsg(segmented_image, encoding='rgb8')
+            segmented_image_msg.header = img_msg.header
             self.segmented_image_pub.publish(segmented_image_msg)
             
         # Publish pointcloud
