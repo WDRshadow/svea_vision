@@ -18,8 +18,8 @@ class PedestrianFlowEstimator:
     MAX_HISTORY_LEN = 4             # Used for pose_deque and time_deque dimension.
     MAX_FRAMES_ID_MISSING = 4       # drop id after certain frames
     SPEED_ACCELERATION_LENGTH = 20  # buffer dimension of speed and acceleration deques
-    FREQUENCY_VEL = 10              # Velocity filter frequency
-    FREQUENCY_ACC = 15              # Acceleration filter frequency
+    FREQUENCY_VEL = 15              # Velocity filter frequency
+    FREQUENCY_ACC = 10              # Acceleration filter frequency
 
     person_tracker_dict = dict()
     person_states = dict()
@@ -56,7 +56,6 @@ class PedestrianFlowEstimator:
         """This method is a callback function that is triggered when a message is received.
         This implementation keeps sending the states of persons who have
         dropped out of frame, because the person might have dropped randomly.
-        
         :param msg: message containing the detected persons
         :return: None"""
 
@@ -91,8 +90,8 @@ class PedestrianFlowEstimator:
             vx,vy,ax,ay = self.smoothed_velocity_acceleration(person_id)
 
             # publish raw y and estimated vy as floats. These are used for easier real-time debugging on the svea through foxglove.
-            self.pub1.publish(person_loc[1])
-            self.pub2.publish(vy)
+            self.pub1.publish(ax)
+            self.pub2.publish(vx)
 
             state = PersonState()
             pose = Pose()
@@ -114,7 +113,7 @@ class PedestrianFlowEstimator:
             # Update the dictionary with {ID: PersonState}
             self.person_states[person_id] = state
 
-        # Cleanup the dictionary of person_states 
+        # Cleanup the dictionary of person_states
         self.__clean_up_dict(msg.header.seq)
 
         # Put the list of personstate in the message and publish it
@@ -133,14 +132,13 @@ class PedestrianFlowEstimator:
     def smoothed_velocity_acceleration(self, person_id):
 
         smoothed_vx, smoothed_vy, smoothed_ax, smoothed_ay = 0,0,0,0
-        
         coords_deque = self.person_tracker_dict[person_id]
         xs = [coords[0] for coords in coords_deque]
         ys = [coords[1] for coords in coords_deque]
 
         if len(self.time_deque) >= 2 and len(ys)>=2 :
             vy = (ys[-1]-ys[-2])/(self.time_deque[-1]-self.time_deque[-2])
-            self.vy.append(vy) 
+            self.vy.append(vy)
             vx = (xs[-1]-xs[-2])/(self.time_deque[-1]-self.time_deque[-2])
             self.vx.append(vx)
 
@@ -155,10 +153,9 @@ class PedestrianFlowEstimator:
             ax = (self.vx_smoothed[-1]-self.vx_smoothed[-2])/(self.time_deque[-1]-self.time_deque[-2])
             self.ax.append(ax)
 
-        if len(self.ay) >= self.FREQUENCY_ACC: 
+        if len(self.ay) >= self.FREQUENCY_ACC:
             smoothed_ay = self.low_pass_filter(self.ay,self.FREQUENCY_ACC)
             smoothed_ax = self.low_pass_filter(self.ax,self.FREQUENCY_ACC)
-
         return smoothed_vx, smoothed_vy, smoothed_ax, smoothed_ay
 
 
