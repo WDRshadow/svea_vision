@@ -66,6 +66,10 @@ class SidewalkMapper:
             self.free_value = load_param('~free_value', 0)
             self.unknown_value = load_param('~unknown_value', -1)
             
+            # Other parameters
+            self.pointcloud_max_distance = load_param('~pointcloud_max_distance', 10.0)
+            self.verbose = load_param('~verbose', False)
+            
             # Check parameters sanity
             if not self.world_frame:
                 raise Exception('world_frame parameter not set. Exiting...'.format(rospy.get_name()))
@@ -118,7 +122,8 @@ class SidewalkMapper:
             rospy.loginfo("{}: ROS Interrupted, shutting down...".format(rospy.get_name()))
             
     def callback(self, raw_pc_msg, sidewalk_pc_msg, filtered_pose_msg):
-        start = time.time()
+        callback_start = time.time()
+        
         # Convert PoseStamped message to TransformStamped message
         transform = Transform()
         transform.translation = filtered_pose_msg.pose.position
@@ -137,6 +142,7 @@ class SidewalkMapper:
         sidewalk_pointcloud_data = sidewalk_pointcloud_data.reshape(-1, 3)
         convert_numpy_time = time.time()
         
+        
         # Transform pointclouds
         raw_pointcloud_data = transform_pointcloud(raw_pointcloud_data, transform)
         sidewalk_pointcloud_data = transform_pointcloud(sidewalk_pointcloud_data, transform)
@@ -152,9 +158,11 @@ class SidewalkMapper:
         
         # Publish occupancy grid
         self.sidewalk_occupancy_grid_pub.publish(self.sidewalk_occupancy_grid)
-        end = time.time()
+        publish_time = time.time()
         
-        rospy.loginfo("Convert time: {:.3f} s, Convert numpy time: {:.3f} s, Transform time: {:.3f} s, Update time: {:.3f} s, Publish time: {:.3f} s, Total time: {:.3f} s".format(convert_time-start, convert_numpy_time-convert_time, transform_time-convert_numpy_time, update_time-transform_time, end-update_time, end-start))
+        # Log
+        if self.verbose:
+            rospy.loginfo("Callback duration: {:.3f} s (Convert: {:.3f} s, Numpy: {:.3f} s, Transform: {:.3f} s, Update: {:.3f} s, Publish: {:.3f} s)".format(publish_time - callback_start, convert_time - callback_start, convert_numpy_time - convert_time, transform_time - convert_numpy_time, update_time - transform_time, publish_time - update_time))
 
     def update_grid(self, raw_pointcloud_data, sidewalk_pointcloud_data):
         # Separate non-sidewalk and sidewalk pointclouds
@@ -163,7 +171,7 @@ class SidewalkMapper:
         
         # Remove NaN values
         non_sidewalk_pointcloud_data = non_sidewalk_pointcloud_data[~np.isnan(non_sidewalk_pointcloud_data).any(axis=1)]
-        sidewalk_pointcloud_data = sidewalk_pointcloud_data[~np.isnan(sidewalk_pointcloud_data).any(axis=1)]        
+        sidewalk_pointcloud_data = sidewalk_pointcloud_data[~np.isnan(sidewalk_pointcloud_data).any(axis=1)]
         
         # Fill non-sidewalk points in occupancy grid
         self.update_non_sidewalk_points(non_sidewalk_pointcloud_data)
