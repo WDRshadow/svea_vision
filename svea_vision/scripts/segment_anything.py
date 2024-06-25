@@ -67,9 +67,9 @@ class SegmentAnything:
             self.owl_roi = load_param('~owl_roi', "[]") # [x1, y1, x2, y2] in relative coordinates
             self.owl_roi = ast.literal_eval(self.owl_roi)
             if len(self.owl_roi) != 4:
-                self.owl_roi = [0.0, 0.0, 1.0, 1.0]
                 if len(self.owl_roi) != 0:
                     rospy.logwarn('{}: Invalid value for owl_roi parameter. Using full image for OWL prediction.'.format(rospy.get_name()))
+                self.owl_roi = [0.0, 0.0, 1.0, 1.0]
             
             # Prompt parameters
             self.prompt_type = load_param('~prompt_type', 'bbox') # bbox or points or text
@@ -107,7 +107,7 @@ class SegmentAnything:
                     self.prompt_text = [self.prompt_text]
                     self.prompt_text_encodings = self.owl_model.encode_text(self.prompt_text)
             elif self.prompt_type=='text':
-                raise Exception('{}: text prompt is only supported when use_cuda is set to True. Only bbox and points prompts are supported without CUDA. Exiting...'.format(rospy.get_name()))
+                raise Exception('text prompt is only supported when use_cuda is set to True. Only bbox and points prompts are supported without CUDA. Exiting...')
             
             # CV Bridge
             self.cv_bridge = CvBridge()
@@ -124,7 +124,7 @@ class SegmentAnything:
             if self.publish_pointcloud:
                 self.segmented_pointcloud_pub = rospy.Publisher(self.segmented_pointcloud_topic, PointCloud2, queue_size=1)
             if not (self.publish_mask or self.publish_image or self.publish_pointcloud):
-                raise Exception('{}: No output type enabled. Please set atleast one of publish_mask, publish_image, or publish_pointcloud parameters to True. Exiting...'.format(rospy.get_name()))
+                raise Exception('No output type enabled. Please set atleast one of publish_mask, publish_image, or publish_pointcloud parameters to True. Exiting...')
             
             # Subscribers
             if self.publish_pointcloud:
@@ -134,19 +134,19 @@ class SegmentAnything:
                 ], queue_size=1)
                 self.ts.registerCallback(self.callback)
             else:
-                self.rgb_sub = rospy.Subscriber(self.rgb_topic, Image, self.callback)
+                self.rgb_sub = rospy.Subscriber(self.rgb_topic, Image, self.callback, queue_size=1, buff_size=2**24)
             
             # Logging dictionary
             self.log_times = {}
             
         except Exception as e:
             # Log error
-            rospy.logfatal(e)
-            rospy.signal_shutdown('Error')
+            rospy.logfatal("{}: {}".format(rospy.get_name(), e))
+            rospy.signal_shutdown("Initialization failed: {}".format(e))
 
         else:
             # Log status
-            rospy.loginfo('{} node initialized with SAM model: {}, OWL model: {}, prompt type: {}, frame_id: {}, use_cuda: {}'.format(
+            rospy.loginfo('{}: Initialized successfully with SAM model: {}, OWL model: {}, prompt type: {}, frame_id: {}, use_cuda: {}'.format(
                 rospy.get_name(), self.sam_model_name, self.owl_model_name, self.prompt_type, self.frame_id, self.use_cuda))
             
     def run(self) -> None:
@@ -180,7 +180,7 @@ class SegmentAnything:
             image=image_roi,
             text=text,
             text_encodings=text_encodings,
-            pad_square=True,
+            pad_square=False,
             threshold=[threshold]
         )
         
@@ -190,7 +190,7 @@ class SegmentAnything:
             max_score_index = owl_output.scores.argmax()
             roi_bbox = [int(x) for x in owl_output.boxes[max_score_index]]
             # Shift the bbox from roi to the original image and clip to image boundaries
-            bbox = roi_bbox + 2*[roi[0], roi[1]]
+            bbox = [sum(x) for x in zip(roi_bbox, 2*[roi[0], roi[1]])]
             bbox[0] = max(0, bbox[0])
             bbox[1] = max(0, bbox[1])
             bbox[2] = min(image.width, bbox[2])
@@ -306,6 +306,7 @@ class SegmentAnything:
         # Publish segmented mask
         if self.publish_mask:
             segmented_mask_msg = self.cv_bridge.cv2_to_imgmsg(segmented_mask, encoding='mono8')
+            segmented_mask_msg.header = img_msg.header
             self.segmented_mask_pub.publish(segmented_mask_msg)
         
         # Publish segmented image
@@ -318,6 +319,7 @@ class SegmentAnything:
             if self.prompt_type=='bbox' or self.prompt_type=='text':
                 cv2.rectangle(segmented_image, (self.bbox[0], self.bbox[1]), (self.bbox[2], self.bbox[3]), (0,255,0), 2)        
             segmented_image_msg = self.cv_bridge.cv2_to_imgmsg(segmented_image, encoding='rgb8')
+            segmented_image_msg.header = img_msg.header
             self.segmented_image_pub.publish(segmented_image_msg)
             
         # Publish pointcloud
