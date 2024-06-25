@@ -118,32 +118,35 @@ class SidewalkMapper:
         transform_stamped.header.stamp = filtered_pose_msg.header.stamp
         transform_stamped.transform.translation = filtered_pose_msg.pose.position
         transform_stamped.transform.rotation = filtered_pose_msg.pose.orientation
-
+        convert_time = time.time()
+        
         # Transform pointclouds
         raw_pc_msg = do_transform_cloud(raw_pc_msg, transform_stamped)
         sidewalk_pc_msg = do_transform_cloud(sidewalk_pc_msg, transform_stamped)
-            
+        transform_time = time.time()
+        
         # Convert ROS PointCloud2 message to numpy array
         raw_pointcloud_data = ros_numpy.numpify(raw_pc_msg)
         raw_pointcloud_data = ros_numpy.point_cloud2.get_xyz_points(raw_pointcloud_data, remove_nans=False)
         
         sidewalk_pointcloud_data = ros_numpy.numpify(sidewalk_pc_msg)
         sidewalk_pointcloud_data = ros_numpy.point_cloud2.get_xyz_points(sidewalk_pointcloud_data, remove_nans=False)
+        convert_numpy_time = time.time()
         
         # Update occupancy grid
         self.update_grid(raw_pointcloud_data, sidewalk_pointcloud_data)
+        update_time = time.time()
         
         # Create occupancy grid
         self.sidewalk_occupancy_grid.header.stamp = sidewalk_pc_msg.header.stamp
         self.sidewalk_occupancy_grid.data = self.create_occupancy_grid()
         
         # Publish occupancy grid
-        self.sidewalk_occupancy_grid_pub.publish(self.sidewalk_occupancy_grid)  
+        self.sidewalk_occupancy_grid_pub.publish(self.sidewalk_occupancy_grid)
         end = time.time()
         
-        rospy.loginfo(f"Time taken: {end - start:.2f} sec")
+        rospy.loginfo("Convert time: {:.3f} s, Transform time: {:.3f} s, Convert numpy time: {:.3f} s, Update time: {:.3f} s, Publish time: {:.3f} s, Total time: {:.3f} s".format(convert_time-start, transform_time-convert_time, convert_numpy_time-transform_time, update_time-convert_numpy_time, end-update_time, end-start))
 
-    @nb.jit
     def update_grid(self, raw_pointcloud_data, sidewalk_pointcloud_data):
         # Separate non-sidewalk and sidewalk pointclouds
         non_sidewalk_mask = np.isnan(sidewalk_pointcloud_data).any(axis=1)
@@ -151,47 +154,75 @@ class SidewalkMapper:
         
         # Remove NaN values
         non_sidewalk_pointcloud_data = non_sidewalk_pointcloud_data[~np.isnan(non_sidewalk_pointcloud_data).any(axis=1)]
-        sidewalk_pointcloud_data = sidewalk_pointcloud_data[~np.isnan(sidewalk_pointcloud_data).any(axis=1)]
+        sidewalk_pointcloud_data = sidewalk_pointcloud_data[~np.isnan(sidewalk_pointcloud_data).any(axis=1)]        
         
         # Fill non-sidewalk points in occupancy grid
-        for point in non_sidewalk_pointcloud_data:
-            x, y, z = point
-            i, j = self.world_to_grid(x, y)
-            
-            if self.is_in_grid(i, j):
-                old_prob, n = self.grid_data[i, j]
-                new_prob = (old_prob * n + self.occupied_value) / (n + 1)
-                self.grid_data[i, j] = (new_prob, n + 1)
+        self.update_non_sidewalk_points(non_sidewalk_pointcloud_data)
         
-        # Fill occupancy grid
-        for point in sidewalk_pointcloud_data:
-            x, y, z = point
-            i, j = self.world_to_grid(x, y)
-            
-            if self.is_in_grid(i, j):
-                old_prob, n = self.grid_data[i, j]
-                if self.sidewalk_z_min <= z < self.sidewalk_z_max:
-                    new_prob = (old_prob * n + self.free_value) / (n + 1)
-                    self.grid_data[i, j] = (new_prob, n + 1)
-                elif self.obstacle_z_min <= z < self.obstacle_z_max:
-                    new_prob = (old_prob * n + self.occupied_value) / (n + 1)
-                    self.grid_data[i, j] = (new_prob, n + 1)
+        # Fill sidewalk points in occupancy grid
+        self.update_sidewalk_points(sidewalk_pointcloud_data)
+                    
+    def update_non_sidewalk_points(self, non_sidewalk_pointcloud_data):
+        grid_info = np.array([self.sidewalk_occupancy_grid.info.origin.position.x, self.sidewalk_occupancy_grid.info.origin.position.y, self.sidewalk_occupancy_grid.info.width, self.sidewalk_occupancy_grid.info.height, self.sidewalk_occupancy_grid.info.resolution])
+        SidewalkMapper._update_non_sidewalk_points(non_sidewalk_pointcloud_data, self.grid_data, grid_info, self.occupied_value)
+        
+    def update_sidewalk_points(self, sidewalk_pointcloud_data):
+        grid_info = np.array([self.sidewalk_occupancy_grid.info.origin.position.x, self.sidewalk_occupancy_grid.info.origin.position.y, self.sidewalk_occupancy_grid.info.width, self.sidewalk_occupancy_grid.info.height, self.sidewalk_occupancy_grid.info.resolution])
+        SidewalkMapper._update_sidewalk_points(sidewalk_pointcloud_data, self.grid_data, grid_info, self.sidewalk_z_min, self.sidewalk_z_max, self.obstacle_z_min, self.obstacle_z_max, self.free_value, self.occupied_value)
     
     def create_occupancy_grid(self):
         # Flatten column-major order (Fortran-style) to match ROS OccupancyGrid
         # Refer to (https://robotics.stackexchange.com/a/66500) for a detailed explanation
         return self.grid_data[:, :, 0].astype(int).flatten(order='F').tolist()
-    
-    def world_to_grid(self, x, y):
-        # Convert world point to grid cell
-        i = int((x - self.sidewalk_occupancy_grid.info.origin.position.x) / self.sidewalk_occupancy_grid.info.resolution)
-        j = int((y - self.sidewalk_occupancy_grid.info.origin.position.y) / self.sidewalk_occupancy_grid.info.resolution)
+
+    @staticmethod
+    @nb.jit(nopython=True)
+    def _update_non_sidewalk_points(non_sidewalk_pointcloud_data, grid_data, grid_info, occupied_value):
+        # Extract grid origin and dimensions
+        x_origin = grid_info[0]
+        y_origin = grid_info[1]
+        width = grid_info[2]
+        height = grid_info[3]
+        resolution = grid_info[4]
         
-        return i, j
-    
-    def is_in_grid(self, i, j):
-        # Check if grid cell is within bounds
-        return 0 <= i < self.sidewalk_occupancy_grid.info.width and 0 <= j < self.sidewalk_occupancy_grid.info.height
+        for point in non_sidewalk_pointcloud_data:
+            x, y, z = point
+            # Convert world point to grid cell
+            i = int((x - x_origin) / resolution)
+            j = int((y - y_origin) / resolution)
+            
+            # Check if grid cell is within bounds
+            if 0 <= i < width and 0 <= j < height:
+                if x <= 10.0:
+                    old_prob, n = grid_data[i, j]
+                    new_prob = (old_prob * n + occupied_value) / (n + 1)
+                    grid_data[i, j] = (new_prob, n + 1)
+                
+    @staticmethod
+    @nb.jit(nopython=True)
+    def _update_sidewalk_points(sidewalk_pointcloud_data, grid_data, grid_info, sidewalk_z_min, sidewalk_z_max, obstacle_z_min, obstacle_z_max, free_value, occupied_value):
+        # Extract grid origin and dimensions
+        x_origin = grid_info[0]
+        y_origin = grid_info[1]
+        width = grid_info[2]
+        height = grid_info[3]
+        resolution = grid_info[4]
+        
+        for point in sidewalk_pointcloud_data:
+            x, y, z = point
+            # Convert world point to grid cell
+            i = int((x - x_origin) / resolution)
+            j = int((y - y_origin) / resolution)
+            
+            # Check if grid cell is within bounds
+            if 0 <= i < width and 0 <= j < height:
+                old_prob, n = grid_data[i, j]
+                if sidewalk_z_min <= z < sidewalk_z_max:
+                    new_prob = (old_prob * n + free_value) / (n + 1)
+                    grid_data[i, j] = (new_prob, n + 1)
+                elif obstacle_z_min <= z < obstacle_z_max:
+                    new_prob = (old_prob * n + occupied_value) / (n + 1)
+                    grid_data[i, j] = (new_prob, n + 1)
     
     
 if __name__ == '__main__':
