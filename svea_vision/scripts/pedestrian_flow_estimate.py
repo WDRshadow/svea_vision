@@ -12,29 +12,30 @@ from svea_vision_msgs.msg import StampedObjectPoseArray, PersonState, PersonStat
 
 
 class PedestrianFlowEstimator:
-    """Class that estimates the speed and acceleration of detected peaple through moving average filtering."""
+    """Class that estimates the speed and acceleration of detected peaple through moving average filtering.
+       TODO: more documentation
+    """
 
-    THRESHOLD_DIST = 0.5            # TODO: Keep the same person id if the distance is not high between two measurements. Improve threshold
     MAX_HISTORY_LEN = 4             # Used for pose_deque and time_deque dimension.
-    MAX_FRAMES_ID_MISSING = 4       # drop id after certain frames
+    MAX_TIME_MISSING = 2            # drop id after certain time [seconds] #TODO: get it from ros param
     SPEED_ACCELERATION_LENGTH = 20  # buffer dimension of speed and acceleration deques
     FREQUENCY_VEL = 15              # Velocity filter frequency
     FREQUENCY_ACC = 10              # Acceleration filter frequency
 
-    person_tracker_dict = dict()
+    
+    time_dict = dict()
+    y_dict = dict()
+    x_dict = dict()
+    vy_dict = dict()
+    vx_dict = dict()
+    vy_smoothed_dict = dict()
+    vx_smoothed_dict = dict()
+    ay_dict = dict()
+    ax_dict = dict()
     person_states = dict()
 
     def __init__(self):
         rospy.init_node("pedestrian_flow_estimate", anonymous=True)
-        self.last_time = None
-        self.time_deque = deque([0],self.MAX_HISTORY_LEN)
-        self.vy = deque([0],self.SPEED_ACCELERATION_LENGTH)
-        self.vy_smoothed = deque([0],self.SPEED_ACCELERATION_LENGTH)
-        self.vx = deque([0],self.SPEED_ACCELERATION_LENGTH)
-        self.vx_smoothed = deque([0],self.SPEED_ACCELERATION_LENGTH)
-        self.ay = deque([0],self.SPEED_ACCELERATION_LENGTH)
-        self.ax = deque([0],self.SPEED_ACCELERATION_LENGTH)
-
         self.pub1 = rospy.Publisher('~float_1', Float64, queue_size=10)
         self.pub2 = rospy.Publisher('~float_2', Float64, queue_size=10)
         self.pub3 = rospy.Publisher("~pedestrian_flow_estimate", PersonStateArray, queue_size=10)
@@ -54,44 +55,39 @@ class PedestrianFlowEstimator:
 
     def __callback(self, msg):
         """This method is a callback function that is triggered when a message is received.
-        This implementation keeps sending the states of persons who have
-        dropped out of frame, because the person might have dropped randomly.
         :param msg: message containing the detected persons
         :return: None"""
-
-        self.__update_time_deque(msg)
 
         personStateArray_msg = PersonStateArray()
         personStateArray_msg.header = msg.header
 
         for person in msg.objects:
-            # Get the person's ID and current location
+            # Get the person's ID and current location and time
             person_id = person.object.id
             person_loc = (
                 person.pose.pose.position.x,
                 person.pose.pose.position.y,
                 person.pose.pose.position.z,
             )
+            current_time = msg.header.stamp.secs + msg.header.stamp.nsecs/1e9
 
-            # Check if the new measurement is close to previous stored measurements and
-            # set person_id if criteria is met.
-            person_id = self.recover_id(person_id, person_loc)
-
-            # Append the current person's location in the dict
-            if person_id in self.person_tracker_dict:
-                self.person_tracker_dict[person_id].append(person_loc)
+            # Append the current person's location in the dict. Same for message's time stamp.
+            if person_id in self.x_dict:
+                self.x_dict[person_id].append(person_loc[0])
+                self.y_dict[person_id].append(person_loc[1])
+                self.time_dict[person_id].append(current_time)
             else:
-                # Initiate a deque that only can contain the wanted length of historical locations
-                self.person_tracker_dict[person_id] = deque(
-                    [person_loc], maxlen=self.MAX_HISTORY_LEN
-                )
+                # Initiate a deque that only can contain the wanted length of historical locations and times
+                self.x_dict[person_id] = deque([person_loc[0]], maxlen=self.MAX_HISTORY_LEN)
+                self.y_dict[person_id] = deque([person_loc[1]], maxlen=self.MAX_HISTORY_LEN)
+                self.time_dict[person_id] = deque([current_time], maxlen=self.MAX_HISTORY_LEN)
 
             # estimate speed and acceleration of person_id pedestrian
             vx,vy,ax,ay = self.smoothed_velocity_acceleration(person_id)
 
             # publish raw y and estimated vy as floats. These are used for easier real-time debugging on the svea through foxglove.
-            self.pub1.publish(ax)
-            self.pub2.publish(vx)
+            self.pub1.publish(ay)
+            self.pub2.publish(vy)
 
             state = PersonState()
             pose = Pose()
@@ -113,8 +109,8 @@ class PedestrianFlowEstimator:
             # Update the dictionary with {ID: PersonState}
             self.person_states[person_id] = state
 
-        # Cleanup the dictionary of person_states
-        self.__clean_up_dict(msg.header.seq)
+        # Cleanup the dictionaries removing old deques
+        self.__clean_up_dict(current_time)
 
         # Put the list of personstate in the message and publish it
         personStateArray_msg.personstate = list(self.person_states.values())
@@ -132,74 +128,68 @@ class PedestrianFlowEstimator:
     def smoothed_velocity_acceleration(self, person_id):
 
         smoothed_vx, smoothed_vy, smoothed_ax, smoothed_ay = 0,0,0,0
-        coords_deque = self.person_tracker_dict[person_id]
-        xs = [coords[0] for coords in coords_deque]
-        ys = [coords[1] for coords in coords_deque]
+        xs = self.x_dict[person_id]
+        ys = self.y_dict[person_id]
 
-        if len(self.time_deque) >= 2 and len(ys)>=2 :
-            vy = (ys[-1]-ys[-2])/(self.time_deque[-1]-self.time_deque[-2])
-            self.vy.append(vy)
-            vx = (xs[-1]-xs[-2])/(self.time_deque[-1]-self.time_deque[-2])
-            self.vx.append(vx)
+        if len(self.time_dict[person_id]) >= 2 and len(ys)>=2 :
+            dt = self.time_dict[person_id][-1]-self.time_dict[person_id][-2]
+            vy = (ys[-1]-ys[-2])/dt
+            vx = (xs[-1]-xs[-2])/dt
+            if person_id in self.vy_dict:
+                self.vy_dict[person_id].append(vy)
+                self.vx_dict[person_id].append(vx)
+            else:
+                self.vy_dict[person_id] = deque([vy], maxlen=self.SPEED_ACCELERATION_LENGTH)
+                self.vx_dict[person_id] = deque([vx], maxlen=self.SPEED_ACCELERATION_LENGTH)
+            
+            if len(self.vy_dict[person_id]) >= self.FREQUENCY_VEL:
+                smoothed_vy = self.low_pass_filter(self.vy_dict[person_id], self.FREQUENCY_VEL)
+                smoothed_vx = self.low_pass_filter(self.vx_dict[person_id], self.FREQUENCY_VEL)
+                if person_id in self.vy_smoothed_dict:
 
-        if len(self.vy) >= self.FREQUENCY_VEL:
-            smoothed_vy = self.low_pass_filter(self.vy, self.FREQUENCY_VEL)
-            self.vy_smoothed.append(smoothed_vy)
-            smoothed_vx = self.low_pass_filter(self.vx, self.FREQUENCY_VEL)
-            self.vx_smoothed.append(smoothed_vx)
+                    self.vy_smoothed_dict[person_id].append(smoothed_vy)
+                    self.vx_smoothed_dict[person_id].append(smoothed_vx)
+                else:
+                    self.vy_smoothed_dict[person_id] = deque([smoothed_vy], maxlen=self.SPEED_ACCELERATION_LENGTH)
+                    self.vx_smoothed_dict[person_id] = deque([smoothed_vx], maxlen=self.SPEED_ACCELERATION_LENGTH)
+            
+                if len(self.vy_smoothed_dict[person_id]) >= 2:
+                    dt = self.time_dict[person_id][-1]-self.time_dict[person_id][-2]         # update dt
+                    ay = (self.vy_smoothed_dict[person_id][-1]-self.vy_smoothed_dict[person_id][-2])/dt
+                    ax = (self.vx_smoothed_dict[person_id][-1]-self.vx_smoothed_dict[person_id][-2])/dt
+                    if person_id in self.ay_dict:
+                        self.ay_dict[person_id].append(ay)
+                        self.ax_dict[person_id].append(ax)
+                    else:
+                        self.ay_dict[person_id] = deque([ay], maxlen=self.SPEED_ACCELERATION_LENGTH)
+                        self.ax_dict[person_id] = deque([ax], maxlen=self.SPEED_ACCELERATION_LENGTH)
 
-            ay = (self.vy_smoothed[-1]-self.vy_smoothed[-2])/(self.time_deque[-1]-self.time_deque[-2])
-            self.ay.append(ay)
-            ax = (self.vx_smoothed[-1]-self.vx_smoothed[-2])/(self.time_deque[-1]-self.time_deque[-2])
-            self.ax.append(ax)
+                    if len(self.ay_dict[person_id]) >= self.FREQUENCY_ACC:
+                        smoothed_ay = self.low_pass_filter(self.ay_dict[person_id],self.FREQUENCY_ACC)
+                        smoothed_ax = self.low_pass_filter(self.ax_dict[person_id],self.FREQUENCY_ACC)
 
-        if len(self.ay) >= self.FREQUENCY_ACC:
-            smoothed_ay = self.low_pass_filter(self.ay,self.FREQUENCY_ACC)
-            smoothed_ax = self.low_pass_filter(self.ax,self.FREQUENCY_ACC)
         return smoothed_vx, smoothed_vy, smoothed_ax, smoothed_ay
 
 
-    def recover_id(self, person_id, person_loc):
-        # TODO: Fix this.
-        #   -   Scenario: If 2 people are in the frame and close to each other
-        #       and 1 of them is suddenly dropped, then new measurements of the
-        #       dropped person would probably be too close to the one that is
-        #       still tracked, thus only tracking one person.
-
-        if self.person_tracker_dict:
-            return person_id
-
-        min_dist = 1000
-        for o_id, o_loc in self.person_tracker_dict.items():
-            dist = np.linalg.norm(np.array(person_loc[0:2]) - np.array(o_loc[-1][0:2]))
-            if dist < min_dist:
-                min_dist = dist
-                if min_dist < self.THRESHOLD_DIST:
-                    person_id = o_id
-
-        return person_id
-
-    def __clean_up_dict(self, current_count):
+    def __clean_up_dict(self, current_time):
         ids_to_drop = []
-        for id, state in self.person_states.items():
-            c = state.counter
-            if current_count - c >= self.MAX_FRAMES_ID_MISSING:
+        for id, value in self.time_dict.items():
+            last_time = value[-1]
+            if current_time - last_time >= self.MAX_TIME_MISSING:
                 ids_to_drop.append(id)
 
         for id in ids_to_drop:
-            self.person_states.pop(
-                id
-            )  # TODO: check why not drop it from person_state_tracker?
-
-    def __update_time_deque(self,msg:StampedObjectPoseArray):
-        """
-        Function used to update the time deque relative to the message received on "/detection_splitter/persons".
-        """
-        current_time = msg.header.stamp.secs + msg.header.stamp.nsecs/1e9
-        if self.last_time is not None:
-            time_diff = (current_time - self.last_time)
-            self.time_deque.append(self.time_deque[-1] + time_diff)
-        self.last_time = current_time
+            # remove id deque from dictonaries if present, otherwise return None.
+            self.person_states.pop(id, None)
+            self.x_dict.pop(id, None)
+            self.y_dict.pop(id, None)
+            self.time_dict.pop(id, None)
+            self.vy_dict.pop(id, None)
+            self.vx_dict.pop(id, None)
+            self.vy_smoothed_dict.pop(id, None)
+            self.vx_smoothed_dict.pop(id, None)
+            self.ay_dict.pop(id, None)
+            self.ax_dict.pop(id, None)
 
     def start(self):
         self.__listener()
