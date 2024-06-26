@@ -53,8 +53,8 @@ class SidewalkMapper:
             # Sidewalk parameters
             self.sidewalk_z_min = load_param('~sidewalk_z_min', -0.5)
             self.sidewalk_z_max = load_param('~sidewalk_z_max', 0.5)
-            self.obstacle_z_min = load_param('~obstacle_z_min', 0.5)
-            self.obstacle_z_max = load_param('~obstacle_z_max', 2.0)
+            self.non_sidewalk_z_min = load_param('~non_sidewalk_z_min', -1.0)
+            self.non_sidewalk_z_max = load_param('~non_sidewalk_z_max', 1.0)
             
             # Occupancy grid parameters
             self.world_frame = load_param('~world_frame', 'map')
@@ -67,7 +67,7 @@ class SidewalkMapper:
             self.unknown_value = load_param('~unknown_value', -1)
             
             # Other parameters
-            self.pointcloud_max_distance = load_param('~pointcloud_max_distance', 10.0)
+            self.pointcloud_max_distance = load_param('~pointcloud_max_distance', 7.5)
             self.verbose = load_param('~verbose', False)
             
             # Check parameters sanity
@@ -182,11 +182,11 @@ class SidewalkMapper:
         
     def update_sidewalk_points(self, sidewalk_pointcloud_data):
         grid_info = np.array([self.sidewalk_occupancy_grid.info.origin.position.x, self.sidewalk_occupancy_grid.info.origin.position.y, self.sidewalk_occupancy_grid.info.width, self.sidewalk_occupancy_grid.info.height, self.sidewalk_occupancy_grid.info.resolution])
-        SidewalkMapper._update_sidewalk_points(sidewalk_pointcloud_data, self.grid_data, grid_info, self.sidewalk_z_min, self.sidewalk_z_max, self.obstacle_z_min, self.obstacle_z_max, self.free_value, self.occupied_value)
+        SidewalkMapper._update_sidewalk_points(sidewalk_pointcloud_data, self.grid_data, grid_info, self.sidewalk_z_min, self.sidewalk_z_max, self.free_value)
         
     def update_non_sidewalk_points(self, non_sidewalk_pointcloud_data):
         grid_info = np.array([self.sidewalk_occupancy_grid.info.origin.position.x, self.sidewalk_occupancy_grid.info.origin.position.y, self.sidewalk_occupancy_grid.info.width, self.sidewalk_occupancy_grid.info.height, self.sidewalk_occupancy_grid.info.resolution])
-        SidewalkMapper._update_non_sidewalk_points(non_sidewalk_pointcloud_data, self.grid_data, grid_info, self.occupied_value)
+        SidewalkMapper._update_non_sidewalk_points(non_sidewalk_pointcloud_data, self.grid_data, grid_info, self.non_sidewalk_z_min, self.non_sidewalk_z_max, self.occupied_value)
     
     def create_occupancy_grid(self):
         # Flatten column-major order (Fortran-style) to match ROS OccupancyGrid
@@ -195,7 +195,7 @@ class SidewalkMapper:
 
     @staticmethod
     @nb.jit(nopython=True)
-    def _update_sidewalk_points(sidewalk_pointcloud_data, grid_data, grid_info, sidewalk_z_min, sidewalk_z_max, obstacle_z_min, obstacle_z_max, free_value, occupied_value):
+    def _update_sidewalk_points(sidewalk_pointcloud_data, grid_data, grid_info, sidewalk_z_min, sidewalk_z_max, free_value):
         # Extract grid origin and dimensions
         x_origin = grid_info[0]
         y_origin = grid_info[1]
@@ -215,13 +215,10 @@ class SidewalkMapper:
                 if sidewalk_z_min <= z < sidewalk_z_max:
                     new_prob = (old_prob * n + free_value) / (n + 1)
                     grid_data[i, j] = (new_prob, n + 1)
-                elif obstacle_z_min <= z < obstacle_z_max:
-                    new_prob = (old_prob * n + occupied_value) / (n + 1)
-                    grid_data[i, j] = (new_prob, n + 1)
     
     @staticmethod
     @nb.jit(nopython=True)
-    def _update_non_sidewalk_points(non_sidewalk_pointcloud_data, grid_data, grid_info, occupied_value):
+    def _update_non_sidewalk_points(non_sidewalk_pointcloud_data, grid_data, grid_info, non_sidewalk_z_min, non_sidewalk_z_max, occupied_value):
         # Extract grid origin and dimensions
         x_origin = grid_info[0]
         y_origin = grid_info[1]
@@ -238,8 +235,9 @@ class SidewalkMapper:
             # Check if grid cell is within bounds
             if 0 <= i < width and 0 <= j < height:
                 old_prob, n = grid_data[i, j]
-                new_prob = (old_prob * n + occupied_value) / (n + 1)
-                grid_data[i, j] = (new_prob, n + 1)
+                if non_sidewalk_z_min <= z < non_sidewalk_z_max:
+                    new_prob = (old_prob * n + occupied_value) / (n + 1)
+                    grid_data[i, j] = (new_prob, n + 1)
                 
     
 if __name__ == '__main__':
