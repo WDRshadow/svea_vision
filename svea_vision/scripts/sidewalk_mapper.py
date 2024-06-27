@@ -60,11 +60,12 @@ class SidewalkMapper:
             self.world_frame = load_param('~world_frame', 'map')
             self.base_frame = load_param('~base_frame', 'base_link')
             self.resolution = load_param('~resolution', 0.05)
-            self.width = load_param('~width', 100)
-            self.height = load_param('~height', 100)
+            self.width = load_param('~width', 50)      # Width is along x-axis in ROS OccupancyGrid
+            self.height = load_param('~height', 50)     # Height is along y-axis in ROS OccupancyGrid
             self.occupied_value = load_param('~occupied_value', 100)
             self.free_value = load_param('~free_value', 0)
             self.unknown_value = load_param('~unknown_value', -1)
+            self.gird_origin = load_param('~grid_origin', "center")    # "center" or "bottom"
             
             # Other parameters
             self.pointcloud_max_distance = load_param('~pointcloud_max_distance', 7.5)
@@ -87,9 +88,16 @@ class SidewalkMapper:
             self.sidewalk_occupancy_grid.info.resolution = self.resolution
             self.sidewalk_occupancy_grid.info.width = int(self.width/self.resolution)
             self.sidewalk_occupancy_grid.info.height = int(self.height/self.resolution)
-            # Set world point (0, 0) to be the center of the grid
-            self.sidewalk_occupancy_grid.info.origin.position.x = -self.width/2
-            self.sidewalk_occupancy_grid.info.origin.position.y = -self.height/2
+            if self.gird_origin == "bottom":
+                # Set world point (0, 0) to be the bottom-center of the grid
+                self.sidewalk_occupancy_grid.info.origin.position.x = 0
+                self.sidewalk_occupancy_grid.info.origin.position.y = -self.height/2
+            else:
+                if self.gird_origin != "center":
+                    rospy.logwarn("{}: Invalid grid_origin parameter, defaulting to center".format(rospy.get_name()))
+                # Set world point (0, 0) to be the center of the grid
+                self.sidewalk_occupancy_grid.info.origin.position.x = -self.width/2
+                self.sidewalk_occupancy_grid.info.origin.position.y = -self.height/2                
             
             # Initialize variables
             self.grid_data = np.full((self.sidewalk_occupancy_grid.info.width, self.sidewalk_occupancy_grid.info.height, 2), (self.unknown_value, 0), dtype=float)  # (x,y) => (probability, no. of observations)
