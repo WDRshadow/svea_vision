@@ -38,6 +38,10 @@ def transform_pointcloud(pointcloud, transform):
 
 
 class SidewalkMapper:
+    """
+    SidewalkMapper class is a ROS node that subscribes to a pointcloud topic, the corresponding sidewalk mask topic, and the filtered pose topic to create an occupancy grid of the sidewalk.
+    Important NOTE: The filtered pose topic should be the pose of the frame in which the pointcloud is published.
+    """
     
     def __init__(self):
         try:
