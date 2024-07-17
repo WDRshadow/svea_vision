@@ -44,8 +44,8 @@ class PedestrianFlowEstimator:
         self.SPEED_ACCELERATION_LENGTH = int(self.FREQUENCY_VEL * 4 / 3)      # buffer dimension of speed and acceleration deques
         # Publishers
         self.pub1 = rospy.Publisher('~float_1', Float64, queue_size=10)
-        self.pub2 = rospy.Publisher('~float_2_reprocessed', Float64, queue_size=10)
-        self.pub3 = rospy.Publisher('~pedestrian_flow_estimate_reprocessed', PersonStateArray, queue_size=10)
+        self.pub2 = rospy.Publisher('~float_2', Float64, queue_size=10)
+        self.pub3 = rospy.Publisher('~pedestrian_flow_estimate', PersonStateArray, queue_size=10)
         self.start()
 
     def __listener(self):

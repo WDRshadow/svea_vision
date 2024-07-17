@@ -16,6 +16,39 @@ TODO
 ### aruco_detect.py
 TODO
 
+### pedestrian_flow_estimate.py
+
+This ROS node, `pedestrian_flow_estimate.py`, subscribes to topics that provide detected pedestrian data, and publishes estimated speed and acceleration of these pedestrians.
+The main purpose of this node is to track and predict the state of each object detected by a camera system using moving average filters. The node processes pedestrian positions, calculates velocities through numerical differentiation, and then smoothes these velocities using a moving average filter. The filtered velocity is used to compute acceleration, which is also filtered to produce more accurate estimates.
+
+#### Subscribed Topics
+
+- `/detection_splitter/persons` (`svea_vision_msgs/StampedObjectPoseArray`): This topic contains data about detected persons, including their positions and IDs.
+
+#### Published Topics
+
+- `~float_1` (`std_msgs/Float64`): Publishes raw acceleration values (ay) for debugging purposes.
+- `~float_2` (`std_msgs/Float64`): Publishes smoothed velocity values (vy) for debugging purposes.
+- `~pedestrian_flow_estimate` (`svea_vision_msgs/PersonStateArray`): Publishes the estimated state (position, velocity, acceleration) of each detected pedestrian.
+
+#### Parameters
+
+- `~discard_id_threshold` (float): Threshold to detect wrong pose estimates due to pedestrian boxes distortion/ bouncing detected position.
+- `~max_time_missing` (float): Time in seconds to drop an ID if no data is received.
+- `~vel_filter_window` (int): Window size for the velocity filter.
+- `~acc_filter_window` (int): Window size for the acceleration filter.
+
+#### Relevant Methods
+
+- `__listener()`: Subscribes to the detection splitter topic and applies the callback function.
+- `__callback(msg)`: Processes incoming messages, calculates velocity and acceleration, and publishes the results.
+- `low_pass_filter(data, frequency)`: Applies a low-pass filter to smooth the data.
+- `smoothed_velocity_acceleration(person_id)`: Calculates smoothed velocity and acceleration for a person.
+- `inaccurate_position_estimate(person_id, current_x, current_y, current_time)`: Detects substantial unpredicted position jumps and discards the ID if necessary.
+- `__clean_up_dict(current_time)`: Cleans up the dictionaries by removing old deques.
+- `__drop_ID(ids_to_drop)`: Removes IDs from all relevant dictionaries.
+
+
 ### sidewalk_segmentation.py
 This node subscribes to rgb image and point cloud topics and publishes a segmentation mask and a point cloud containing only the sidewalk. The script uses the `FastSAM` model for segmentation and supports three types of prompts for segmentation: bounding box, points, and text, which are configurable through parameters.
 
