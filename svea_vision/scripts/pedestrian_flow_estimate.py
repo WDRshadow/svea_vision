@@ -12,17 +12,16 @@ from svea_vision_msgs.msg import StampedObjectPoseArray, PersonState, PersonStat
 
 
 class PedestrianFlowEstimator:
-    """Class that estimates the speed and acceleration of detected peaple through moving average filtering.
-       TODO: more documentation
     """
-
-    MAX_HISTORY_LEN = 4             # Used for pose_deque and time_deque dimension.
-    MAX_TIME_MISSING = 2            # drop id after certain time [seconds] #TODO: get it from ros param
-    SPEED_ACCELERATION_LENGTH = 20  # buffer dimension of speed and acceleration deques
-    FREQUENCY_VEL = 15              # Velocity filter frequency
-    FREQUENCY_ACC = 10              # Acceleration filter frequency
-
-    
+    This class estimates the speed and acceleration of detected people using moving average filtering. 
+    Pedestrian positions are extracted from the detection splitter topic and processed if they are not 
+    significantly distorted due to issues like overlapping boxes. If the data is deemed reliable, the 
+    person ID and corresponding position are kept, and the velocity is calculated through numerical differentiation 
+    and then smoothed using a moving average filter. This filtered velocity is used to compute the acceleration, 
+    which is also filtered to produce a more accurate estimate. While the moving average filters enhance the 
+    estimates, they introduce delays that should be considered for precise pedestrian flow prediction.
+    """
+ 
     time_dict = dict()
     y_dict = dict()
     x_dict = dict()
@@ -36,9 +35,17 @@ class PedestrianFlowEstimator:
 
     def __init__(self):
         rospy.init_node("pedestrian_flow_estimate", anonymous=True)
+        # load parameters
+        self.MAX_HISTORY_LEN = 4                                              # Used for pose_deque and time_deque dimension.
+        self.DISCARD_THRESHOLD = rospy.get_param('~discard_id_threshold')     # Used to detect wrong pose estimate due to pedestrian boxes distortion
+        self.MAX_TIME_MISSING = rospy.get_param('~max_time_missing')          # drop id after certain time [seconds]
+        self.FREQUENCY_VEL = rospy.get_param('~vel_filter_window')            # Velocity filter frequency
+        self.FREQUENCY_ACC = int(self.FREQUENCY_VEL * 2 / 3)                  # Acceleration filter frequency
+        self.SPEED_ACCELERATION_LENGTH = int(self.FREQUENCY_VEL * 4 / 3)      # buffer dimension of speed and acceleration deques
+        # Publishers
         self.pub1 = rospy.Publisher('~float_1', Float64, queue_size=10)
-        self.pub2 = rospy.Publisher('~float_2', Float64, queue_size=10)
-        self.pub3 = rospy.Publisher("~pedestrian_flow_estimate", PersonStateArray, queue_size=10)
+        self.pub2 = rospy.Publisher('~float_2_reprocessed', Float64, queue_size=10)
+        self.pub3 = rospy.Publisher('~pedestrian_flow_estimate_reprocessed', PersonStateArray, queue_size=10)
         self.start()
 
     def __listener(self):
@@ -73,9 +80,15 @@ class PedestrianFlowEstimator:
 
             # Append the current person's location in the dict. Same for message's time stamp.
             if person_id in self.x_dict:
-                self.x_dict[person_id].append(person_loc[0])
-                self.y_dict[person_id].append(person_loc[1])
-                self.time_dict[person_id].append(current_time)
+                if person_id in self.vx_smoothed_dict.keys() and self.inaccurate_position_estimate(person_id,person_loc[0],person_loc[1],current_time):
+                    # if the position of the pedestrian changes more than expected, the position dictonaries are not updated and the flow estimation does not happen. 
+                    # Furthermore, the person ID is dropped. This is preventing from wrong estimates when a person's box gets too distrorted due to another person's box overlapping or disturbances.
+                    self.__drop_ID([person_id])
+                    continue
+                else:
+                    self.x_dict[person_id].append(person_loc[0])
+                    self.y_dict[person_id].append(person_loc[1])
+                    self.time_dict[person_id].append(current_time)  
             else:
                 # Initiate a deque that only can contain the wanted length of historical locations and times
                 self.x_dict[person_id] = deque([person_loc[0]], maxlen=self.MAX_HISTORY_LEN)
@@ -154,7 +167,6 @@ class PedestrianFlowEstimator:
                     self.vx_smoothed_dict[person_id] = deque([smoothed_vx], maxlen=self.SPEED_ACCELERATION_LENGTH)
             
                 if len(self.vy_smoothed_dict[person_id]) >= 2:
-                    dt = self.time_dict[person_id][-1]-self.time_dict[person_id][-2]         # update dt
                     ay = (self.vy_smoothed_dict[person_id][-1]-self.vy_smoothed_dict[person_id][-2])/dt
                     ax = (self.vx_smoothed_dict[person_id][-1]-self.vx_smoothed_dict[person_id][-2])/dt
                     if person_id in self.ay_dict:
@@ -171,13 +183,31 @@ class PedestrianFlowEstimator:
         return smoothed_vx, smoothed_vy, smoothed_ax, smoothed_ay
 
 
+    def inaccurate_position_estimate(self, person_id, current_x, current_y, current_time):
+        """
+        This function detects substantially unpredicted, hence wrong, position jumps and discard the person_id 
+        from the deques if that happens. (Tested on real data)
+        Notice that this check is performed only when at least one smoothened velocity has been computed, so after some time since the person 
+        is firstly detected.
+        """
+        dt = current_time - self.time_dict[person_id][-1] 
+        predicted_x = self.x_dict[person_id][-1] + self.vx_smoothed_dict[person_id][-1] * dt
+        predicted_y = self.y_dict[person_id][-1] + self.vy_smoothed_dict[person_id][-1] * dt
+
+        if abs(current_x - predicted_x) > self.DISCARD_THRESHOLD  or abs(current_y - predicted_y) > self.DISCARD_THRESHOLD :
+            return True
+        else:
+            return False
+
     def __clean_up_dict(self, current_time):
         ids_to_drop = []
         for id, value in self.time_dict.items():
             last_time = value[-1]
             if current_time - last_time >= self.MAX_TIME_MISSING:
                 ids_to_drop.append(id)
+        self.__drop_ID(ids_to_drop)
 
+    def __drop_ID(self,ids_to_drop):
         for id in ids_to_drop:
             # remove id deque from dictonaries if present, otherwise return None.
             self.person_states.pop(id, None)
