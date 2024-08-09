@@ -21,15 +21,6 @@ def load_param(name, value=None):
         assert rospy.has_param(name), f'Missing parameter "{name}"'
     return rospy.get_param(name, value)
 
-def replace_base(old, new) -> str:
-    split_last = lambda xs: (xs[:-1], xs[-1])
-    is_private = new.startswith('~')
-    is_global = new.startswith('/')
-    assert not (is_private or is_global)
-    ns, _ = split_last(old.split('/'))
-    ns += new.split('/')
-    return '/'.join(ns)
-
 def transform_pointcloud(pointcloud, transform):
     rotation_matrix = tr.quaternion_matrix([transform.rotation.x, transform.rotation.y, transform.rotation.z, transform.rotation.w])[:3, :3]
     translation = np.array([transform.translation.x, transform.translation.y, transform.translation.z])

@@ -20,7 +20,6 @@ from ultralytics import FastSAM
 from ultralytics.models.fastsam import FastSAMPrompt
 from nanoowl.owl_predictor import OwlPredictor as NanoOwlPredictor
 
-
 np.float = float  # NOTE: Temporary fix for ros_numpy issue; check #39
 import ros_numpy
 
@@ -30,17 +29,11 @@ def load_param(name, value=None):
         assert rospy.has_param(name), f'Missing parameter "{name}"'
     return rospy.get_param(name, value)
 
-def replace_base(old, new) -> str:
-    split_last = lambda xs: (xs[:-1], xs[-1])
-    is_private = new.startswith('~')
-    is_global = new.startswith('/')
-    assert not (is_private or is_global)
-    ns, _ = split_last(old.split('/'))
-    ns += new.split('/')
-    return '/'.join(ns)
-
 
 class SegmentAnything:
+    """
+    SegmentAnything class is a ROS node that segments an object in an image based on a prompt. The prompt can be a bounding box, points, or text. The segmentation is done using FastSAM model and the prompt is used to guide the segmentation process. If the prompt is text, then nanoOWL model is used to predict the bounding box which is then used as the prompt for FastSAM model. This is preferred over directly using FastSAM model with text prompt as it runs much faster without much loss in accuracy. The segmented mask, image, and pointcloud are published as ROS topics.
+    """
     
     def __init__(self) -> None:
         try:
