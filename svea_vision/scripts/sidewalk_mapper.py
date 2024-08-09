@@ -40,10 +40,10 @@ class SidewalkMapper:
             rospy.init_node('sidewalk_mapper')
             
             # Topic parameters
-            self.pointcloud_topic = load_param('~pointcloud_topic', '/zed/zed_node/point_cloud/cloud_registered')
+            self.pointcloud_topic = load_param('~pointcloud_topic', 'pointcloud')
             self.sidewalk_mask_topic = load_param('~sidewalk_mask_topic', 'sidewalk_mask')
             self.sidewalk_occupancy_grid_topic = load_param('~sidewalk_occupancy_grid_topic', 'sidewalk_occupancy_grid')
-            self.filtered_pose_topic = load_param('~filtered_pose_topic', '/zed/zed_node/pose')
+            self.filtered_pose_topic = load_param('~filtered_pose_topic', 'filtered_pose')
             
             # Sidewalk parameters
             self.sidewalk_z_min = load_param('~sidewalk_z_min', -0.5)

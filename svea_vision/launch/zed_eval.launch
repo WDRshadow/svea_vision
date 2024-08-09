@@ -48,8 +48,6 @@
         <include file="$(find mocap_qualisys)/launch/qualisys.launch">
             <arg name="server_address" value="$(arg mocap_address)"/>
         </include>
-
-        <!-- <node pkg="tf2_ros" type="static_transform_publisher" name="sensor_broadcaster" output="screen" args="0 0 0 0 0 0 rsu base_link"/> -->
     </group>
 
     <!-- Record rosbag -->
