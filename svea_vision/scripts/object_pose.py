@@ -58,13 +58,6 @@ class object_pose:
         self.tf_buf = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buf)
 
-        # rospy.loginfo('Waiting for transform to target_frame "%s"', self.FRAME_ID)
-        # while not self.tf_buf.can_transform(self.FRAME_ID, "zed_left_camera_optical_frame", rospy.Time(0)):
-        #     if rospy.is_shutdown():
-        #         return
-        # rospy.loginfo('Found transform to target_frame "%s"', self.FRAME_ID)
-
-
         ## Publishers
 
         self.pub_objectposes = rospy.Publisher(

@@ -33,7 +33,8 @@ class PublishImage:
 
         except Exception as e:
             # Log error
-            rospy.logerr(e)
+            rospy.logfatal("{}: {}".format(rospy.get_name(), e))
+            rospy.signal_shutdown("Initialization failed: {}".format(e))            
 
         else:
             # Log status
