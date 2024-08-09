@@ -8,7 +8,7 @@ from std_msgs.msg import Float64
 from svea_vision_msgs.msg import StampedObjectPoseArray, PersonState, PersonStateArray
 
 
-# Purpose: To track and predict the state of each object detected by a camera system using moving average filters
+# Purpose: To track and predict the flow of pedestrians detected by a camera system using moving average filters
 
 
 class PedestrianFlowEstimator:
@@ -46,13 +46,14 @@ class PedestrianFlowEstimator:
         self.pub1 = rospy.Publisher('~float_1', Float64, queue_size=10)
         self.pub2 = rospy.Publisher('~float_2', Float64, queue_size=10)
         self.pub3 = rospy.Publisher('~pedestrian_flow_estimate', PersonStateArray, queue_size=10)
-        self.start()
 
     def __listener(self):
         """Subscribes to the topic containing only detected
         persons and applies the function __callback."""
+
+        persons_topic = rospy.get_param('~persons_topic', '/detection_splitter/persons')
         rospy.Subscriber(
-            "/detection_splitter/persons",
+            persons_topic,
             StampedObjectPoseArray,
             self.__callback,
         )
@@ -62,8 +63,8 @@ class PedestrianFlowEstimator:
 
     def __callback(self, msg):
         """This method is a callback function that is triggered when a message is received.
-        :param msg: message containing the detected persons
-        :return: None"""
+           It processes incoming messages, calculates velocity and acceleration, and publishes the results.
+        """
 
         personStateArray_msg = PersonStateArray()
         personStateArray_msg.header = msg.header
@@ -132,6 +133,9 @@ class PedestrianFlowEstimator:
 
 
     def low_pass_filter(self, data, frequency):
+        """
+        Applies a low-pass filter to smooth the data.
+        """
         if len(data) < frequency:
             raise ValueError("The length of the data must be at least equal to the frequency.")
         window_sum = np.sum(list(data)[-frequency:])
@@ -139,6 +143,9 @@ class PedestrianFlowEstimator:
         return moving_average
 
     def smoothed_velocity_acceleration(self, person_id):
+        """
+        Calculates smoothed velocity and acceleration for a person.
+        """
 
         smoothed_vx, smoothed_vy, smoothed_ax, smoothed_ay = 0,0,0,0
         xs = self.x_dict[person_id]
@@ -200,6 +207,9 @@ class PedestrianFlowEstimator:
             return False
 
     def __clean_up_dict(self, current_time):
+        """
+        Cleans up the dictionaries by removing old deques.
+        """
         ids_to_drop = []
         for id, value in self.time_dict.items():
             last_time = value[-1]
@@ -208,8 +218,10 @@ class PedestrianFlowEstimator:
         self.__drop_ID(ids_to_drop)
 
     def __drop_ID(self,ids_to_drop):
+        """
+        Removes IDs from all relevant dictionaries if present, otherwise return None.
+        """
         for id in ids_to_drop:
-            # remove id deque from dictonaries if present, otherwise return None.
             self.person_states.pop(id, None)
             self.x_dict.pop(id, None)
             self.y_dict.pop(id, None)
@@ -226,4 +238,4 @@ class PedestrianFlowEstimator:
 
 
 if __name__ == "__main__":
-    predictions = PedestrianFlowEstimator()
+    PedestrianFlowEstimator().start()

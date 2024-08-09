@@ -80,6 +80,7 @@
         <node name="detection_splitter" pkg="svea_vision" type="detection_splitter.py" output="screen" ></node>
         <node name="person_state_estimation" pkg="svea_vision" type="person_state_estimation.py" output="screen"/> 
         <node name="pedestrian_flow_estimate" pkg="svea_vision" type="pedestrian_flow_estimate.py" output="screen">
+            <param name="persons_topic"             value="/detection_splitter/persons"/>
             <param name="max_time_missing"           value="$(arg max_time_missing)"/>
             <param name="vel_filter_window"          value="$(arg vel_filter_window)"/>
             <param name="discard_id_threshold"       value="$(arg discard_id_threshold)"/>
