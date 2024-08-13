@@ -31,8 +31,8 @@
     <arg name="publish_pointcloud"          default="false"/>
 
     <!-- Consumed topics -->
-    <arg name="rgb_topic"                   default="image"/>
-    <arg name="pointcloud_topic"            default="pointcloud"/>
+    <arg name="rgb_topic"                   default="/zed/zed_node/rgb/image_rect_color"/>
+    <arg name="pointcloud_topic"            default="/zed/zed_node/point_cloud/cloud_registered"/>
 
     <!-- Produced topics -->
     <arg name="sidewalk_mask_topic"         default="sidewalk_mask"/>
