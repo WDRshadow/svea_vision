@@ -18,6 +18,20 @@ def load_param(name, value=None):
     return rospy.get_param(name, value)
 
 class PublishImage:
+    """
+    This class is a ROS node that publishes an image or a set of images to a topic at a specified rate. The image(s) can be specified as a single image path or a directory of images.
+    
+    Parameters:
+        - ~image_topic (str): The topic name to publish the image(s) to. Default: 'static_image'
+        - ~image_path (str): The path to a single image or a directory of images.
+        - ~rate (int): The rate at which to publish the image(s). Default: 30 Hz
+        
+    Subscribed Topics:
+        - None
+        
+    Published Topics:
+        - image_topic (sensor_msgs/Image): The image(s) to be published.
+    """
 
     def __init__(self):
         try:

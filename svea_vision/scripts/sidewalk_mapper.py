@@ -36,6 +36,35 @@ class SidewalkMapper:
     """
     SidewalkMapper class is a ROS node that subscribes to a pointcloud topic, the corresponding sidewalk mask topic, and the filtered pose topic to create an occupancy grid of the sidewalk.
     Important NOTE: The filtered pose topic should be the pose of the frame in which the pointcloud is published.
+    
+    Parameters:
+        - ~pointcloud_topic (str): The topic name of the pointcloud data. Default: 'pointcloud'
+        - ~sidewalk_mask_topic (str): The topic name of the sidewalk mask data. Default: 'sidewalk_mask'
+        - ~sidewalk_occupancy_grid_topic (str): The topic name of the sidewalk occupancy grid. Default: 'sidewalk_occupancy_grid'
+        - ~filtered_pose_topic (str): The topic name of the filtered pose data. Default: 'filtered_pose'
+        - ~sidewalk_z_min (float): The minimum z-value of the sidewalk. Default: -0.5
+        - ~sidewalk_z_max (float): The maximum z-value of the sidewalk. Default: 0.5
+        - ~non_sidewalk_z_min (float): The minimum z-value of the non-sidewalk. Default: -1.0
+        - ~non_sidewalk_z_max (float): The maximum z-value of the non-sidewalk. Default: 1.0
+        - ~world_frame (str): The frame id of the world. Default: 'map'
+        - ~base_frame (str): The frame id of the base frame. Default: 'base_link'
+        - ~resolution (float): The resolution of the occupancy grid. Default: 0.05
+        - ~width (int): The width of the occupancy grid. Default: 50
+        - ~height (int): The height of the occupancy grid. Default: 50
+        - ~occupied_value (int): The value to be assigned for occupied cells in the occupancy grid. Default: 100
+        - ~free_value (int): The value to be assigned for free cells in the occupancy grid. Default: 0
+        - ~unknown_value (int): The value to be assigned for unknown cells in the occupancy grid. Default: -1
+        - ~grid_origin (str): The origin of the grid. Default: 'center'. Options: 'center' or 'bottom'
+        - ~pointcloud_max_distance (float): The maximum distance of the pointcloud data to be considered. Default: 7.5
+        - ~verbose (bool): Verbose mode. Default: False
+        
+    Subscribed Topics:
+        - pointcloud (sensor_msgs/PointCloud2): The pointcloud data.
+        - sidewalk_mask (sensor_msgs/Image): The sidewalk mask data.
+        - filtered_pose (geometry_msgs/PoseStamped): The filtered pose data.
+        
+    Published Topics:
+        - sidewalk_occupancy_grid (nav_msgs/OccupancyGrid): The sidewalk occupancy grid.
     """
     
     def __init__(self):

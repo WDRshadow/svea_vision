@@ -37,6 +37,42 @@ def load_param(name, value=None):
 class SegmentAnything:
     """
     SegmentAnything class is a ROS node that segments an object in an image based on a prompt. The prompt can be a bounding box, points, or text. The segmentation is done using FastSAM model and the prompt is used to guide the segmentation process. If the prompt is text, then nanoOWL model is used to predict the bounding box which is then used as the prompt for FastSAM model. This is preferred over directly using FastSAM model with text prompt as it runs much faster without much loss in accuracy. The segmented mask, image, and pointcloud are published as ROS topics.
+    
+    Parameters:
+        - ~rgb_topic (str): RGB image topic name. Default: 'image'
+        - ~pointcloud_topic (str): Pointcloud topic name. Default: 'pointcloud'
+        - ~segmented_mask_topic (str): Segmented mask topic name. Default: 'segmented_mask'
+        - ~segmented_image_topic (str): Segmented image topic name. Default: 'segmented_image'
+        - ~segmented_pointcloud_topic (str): Segmented pointcloud topic name. Default: 'segmented_pointcloud'
+        - ~sam_model_name (str): FastSAM model name. Default: 'FastSAM-x.pt'
+        - ~sam_conf (float): Confidence threshold for FastSAM model. Default: 0.4
+        - ~sam_iou (float): IoU threshold for FastSAM model. Default: 0.9
+        - ~owl_model_name (str): nanoOWL model name. Default: 'google/owlvit-base-patch32'
+        - ~owl_image_encoder_path (str): Path to nanoOWL image encoder engine. Default: '/opt/nanoowl/data/owl_image_encoder_patch32.engine'
+        - ~owl_threshold (float): Threshold for nanoOWL model. Default: 0.1
+        - ~owl_roi (list): Region of interest for nanoOWL model. Default: []
+        - ~prompt_type (str): Prompt type. Default: 'bbox'
+        - ~prompt_bbox (list): Bounding box prompt. Default: [0.30, 0.50, 0.70, 0.90]
+        - ~prompt_points (list): Points prompt. Default: [[0.50, 0.90]]
+        - ~prompt_text (str): Text prompt. Default: 'a person'
+        - ~use_bbox_fallback (bool): Use bbox prompt if text prompt does not detect anything. Default: False
+        - ~use_cuda (bool): Use CUDA for inference. Default: True
+        - ~brightness_window (float): Window size for calculating mean brightness. Default: 0.5
+        - ~mean_brightness (float): Mean brightness value. Default: 0.5
+        - ~frame_id (str): Frame ID for pointcloud. Default: ''
+        - ~verbose (bool): Verbose mode. Default: False
+        - ~publish_mask (bool): Publish segmented mask. Default: False
+        - ~publish_image (bool): Publish segmented image. Default: True
+        - ~publish_pointcloud (bool): Publish segmented pointcloud. Default: False
+        
+    Subscribed Topics:
+        - rgb_topic (sensor_msgs/Image): RGB image topic
+        - pointcloud_topic (sensor_msgs/PointCloud2): Pointcloud topic
+        
+    Published Topics:
+        - segmented_mask_topic (sensor_msgs/Image): Segmented mask topic
+        - segmented_image_topic (sensor_msgs/Image): Segmented image topic
+        - segmented_pointcloud_topic (sensor_msgs/PointCloud2): Segmented pointcloud topic
     """
     
     def __init__(self) -> None:
