@@ -161,9 +161,10 @@ class object_pose:
             ps.point.z = z
 
             # Create point in map frame
-            trans = self.tf_buf.lookup_transform(
-                self.FRAME_ID, ps.header.frame_id, rospy.Time(0)
-            )
+            if not self.tf_buf.can_transform(self.FRAME_ID, ps.header.frame_id, rospy.Time(0)):
+                rospy.loginfo('Cannot do transform for objects from "%s" to target_frame "%s"', ps.header.frame_id, self.FRAME_ID)
+                return
+            trans = self.tf_buf.lookup_transform(self.FRAME_ID, ps.header.frame_id, rospy.Time(0))
             ps = do_transform_point(ps, trans)
 
             objpose = ObjectPose()
@@ -198,12 +199,14 @@ class object_pose:
         marker.action = 0
         marker.pose.orientation.w = 1
         marker.scale = Vector3(0.2, 0.2, 0.2)
-        marker.color = ColorRGBA(0, 1, 0, 1)
         marker.lifetime = rospy.Duration(0.5)
 
         for objpose in msg.objects:
             if objpose.object.label == "person":
-                marker.points.append(objpose.pose.pose.position)
+                marker.colors.append(ColorRGBA(0, 1, 0, 1))
+            else:
+                marker.colors.append(ColorRGBA(1, 0, 0, 1))
+            marker.points.append(objpose.pose.pose.position)
 
         self.pub_objectmarkers.publish(marker)
 

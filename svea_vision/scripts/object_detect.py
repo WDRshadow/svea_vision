@@ -7,7 +7,6 @@ import cv2
 import numpy as np
 
 from ultralytics import YOLO
-from sort import Sort
 
 from svea_vision_msgs.msg import Object, StampedObjectArray
 
@@ -102,10 +101,10 @@ class object_detect:
         classes = {lbl: cls for cls, lbl in self.model.names.items()}
         self.label_to_class = lambda label: classes[label]
 
-        ## SORT multi-object tracker
+        self.detect_kwargs = dict(persist=True, conf=0.5, verbose=False)
 
-        self.tracked_objects = []
-        self.sort = Sort(max_age=self.MAX_AGE, min_hits=3, iou_threshold=0.3)
+        if self.ONLY_OBJECTS:
+            self.detect_kwargs.update(classes=list(map(self.label_to_class, self.ONLY_OBJECTS)))
 
         ## Publishers
 
@@ -122,7 +121,7 @@ class object_detect:
 
         ## Subscribers
 
-        rospy.Subscriber(self.SUB_IMAGE, Image, self.callback)
+        rospy.Subscriber(self.SUB_IMAGE, Image, self.callback, queue_size=1, buff_size=2**24)
         rospy.loginfo(self.SUB_IMAGE)
 
         ## Relay (sub->pub) camera info
@@ -143,82 +142,11 @@ class object_detect:
         frame = cv2.resize(frame, (self.IMAGE_WIDTH, self.IMAGE_HEIGHT))
         frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2RGB)
 
-        if self.ONLY_OBJECTS:
-            result = self.model.predict(
-                frame,
-                conf=0.5,
-                verbose=False,
-                classes=list(map(self.label_to_class, self.ONLY_OBJECTS)),
-            )[0]
-        else:
-            result = self.model.predict(frame, conf=0.5, verbose=False)[0]
-
-        result = result.cpu().numpy()
-        boxes = result.boxes.xyxy
-        conf = result.boxes.conf
-        cls = result.boxes.cls
-
-        ## Update tracker
-
-        self.tracked_objects = self.sort.update(boxes)
-
-        ## Create object messages
-
-        objects = []
-        for box, c, p in zip(boxes, cls, conf):
-            u1, v1, u2, v2 = box
-
-            # get the label name
-            label = result.names[c]
-
-            if self.SKIP_OBJECTS and label in self.SKIP_OBJECTS:
-                continue
-
-            if self.ONLY_OBJECTS and label not in self.ONLY_OBJECTS:
-                continue
-
-            # get real pixel coords
-            u1, u2 = [round(u) for u in (u1, u2)]
-            v1, v2 = [round(v) for v in (v1, v2)]
-
-            # do not continue if box has no size
-            if u1 != u2 and v1 != v2:
-                # pick best matched tracked object
-                trk = [0, 0, 0, 0, 0]
-                trk_iou = 0
-                trk_ind = -1
-                for i, _trk in enumerate(self.tracked_objects):
-                    _iou = iou(_trk[:4], box[:4])
-                    if trk_iou < _iou:
-                        trk = _trk
-                        trk_iou = _iou
-                        trk_ind = i
-
-                tracker = self.sort.trackers[trk_ind]
-
-                obj = Object()
-                obj.id = int(trk[-1])
-                obj.label = label
-                obj.detection_conf = p
-                obj.tracking_conf = tracker.kf.likelihood
-                obj.image_width = self.IMAGE_WIDTH
-                obj.image_height = self.IMAGE_HEIGHT
-                obj.roi.x_offset = u1
-                obj.roi.y_offset = v1
-                obj.roi.width = u2 - u1
-                obj.roi.height = v2 - v1
-                objects.append(obj)
+        result = self.model.track(frame, **self.detect_kwargs)[0]
 
         # if enabled, modify frame (add bounding boxes)
         if self.ENABLE_BBOX_IMAGE:
             frame = result.plot()
-
-        # Publish objects
-        if objects:
-            object_array = StampedObjectArray()
-            object_array.header = image.header
-            object_array.objects = objects
-            self.pub_objects.publish(object_array)
 
         if self.ENABLE_BBOX_IMAGE:
             new_image = Image()
@@ -230,6 +158,54 @@ class object_detect:
             new_image.data = frame.tobytes()
 
             self.pub_bbox_image.publish(new_image)
+
+        if len(result.boxes) == 0 or not result.boxes.is_track:
+            return
+
+        result = result.cpu().numpy()
+        it = zip(result.boxes.xyxy,
+                result.boxes.conf,
+                result.boxes.cls,
+                result.boxes.id)
+
+        ## Create object messages
+
+        objects = []
+        for box, _pred, _cls, _id in it:
+            u1, v1, u2, v2 = box
+
+            # get the label name
+            label = result.names[_cls]
+
+            if self.SKIP_OBJECTS and label in self.SKIP_OBJECTS:
+                continue
+
+            if self.ONLY_OBJECTS and label not in self.ONLY_OBJECTS:
+                continue
+
+            # get real pixel coords
+            u1, u2 = [round(u) for u in (u1, u2)]
+            v1, v2 = [round(v) for v in (v1, v2)]
+
+            obj = Object()
+            obj.id = int(_id)
+            obj.label = label
+            obj.detection_conf = _pred
+            obj.tracking_conf = _pred
+            obj.image_width = self.IMAGE_WIDTH
+            obj.image_height = self.IMAGE_HEIGHT
+            obj.roi.x_offset = u1
+            obj.roi.y_offset = v1
+            obj.roi.width = u2 - u1
+            obj.roi.height = v2 - v1
+            objects.append(obj)
+
+        # Publish objects
+        if objects:
+            object_array = StampedObjectArray()
+            object_array.header = image.header
+            object_array.objects = objects
+            self.pub_objects.publish(object_array)
 
 
 if __name__ == "__main__":
