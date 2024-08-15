@@ -1,5 +1,9 @@
 #! /usr/bin/env python3
 
+__author__ = "Sulthan Suresh Fazeela"
+__email__ = "sultha@kth.se"
+__license__ = "MIT"
+
 import rospy
 import rospkg
 import tf2_ros
@@ -20,7 +24,6 @@ from ultralytics import FastSAM
 from ultralytics.models.fastsam import FastSAMPrompt
 from nanoowl.owl_predictor import OwlPredictor as NanoOwlPredictor
 
-
 np.float = float  # NOTE: Temporary fix for ros_numpy issue; check #39
 import ros_numpy
 
@@ -30,17 +33,47 @@ def load_param(name, value=None):
         assert rospy.has_param(name), f'Missing parameter "{name}"'
     return rospy.get_param(name, value)
 
-def replace_base(old, new) -> str:
-    split_last = lambda xs: (xs[:-1], xs[-1])
-    is_private = new.startswith('~')
-    is_global = new.startswith('/')
-    assert not (is_private or is_global)
-    ns, _ = split_last(old.split('/'))
-    ns += new.split('/')
-    return '/'.join(ns)
-
 
 class SegmentAnything:
+    """
+    SegmentAnything class is a ROS node that segments an object in an image based on a prompt. The prompt can be a bounding box, points, or text. The segmentation is done using FastSAM model and the prompt is used to guide the segmentation process. If the prompt is text, then nanoOWL model is used to predict the bounding box which is then used as the prompt for FastSAM model. This is preferred over directly using FastSAM model with text prompt as it runs much faster without much loss in accuracy. The segmented mask, image, and pointcloud are published as ROS topics.
+    
+    Parameters:
+        - ~rgb_topic (str): RGB image topic name. Default: 'image'
+        - ~pointcloud_topic (str): Pointcloud topic name. Default: 'pointcloud'
+        - ~segmented_mask_topic (str): Segmented mask topic name. Default: 'segmented_mask'
+        - ~segmented_image_topic (str): Segmented image topic name. Default: 'segmented_image'
+        - ~segmented_pointcloud_topic (str): Segmented pointcloud topic name. Default: 'segmented_pointcloud'
+        - ~sam_model_name (str): FastSAM model name. Default: 'FastSAM-x.pt'
+        - ~sam_conf (float): Confidence threshold for FastSAM model. Default: 0.4
+        - ~sam_iou (float): IoU threshold for FastSAM model. Default: 0.9
+        - ~owl_model_name (str): nanoOWL model name. Default: 'google/owlvit-base-patch32'
+        - ~owl_image_encoder_path (str): Path to nanoOWL image encoder engine. Default: '/opt/nanoowl/data/owl_image_encoder_patch32.engine'
+        - ~owl_threshold (float): Threshold for nanoOWL model. Default: 0.1
+        - ~owl_roi (list): Region of interest for nanoOWL model. Default: []
+        - ~prompt_type (str): Prompt type. Default: 'bbox'
+        - ~prompt_bbox (list): Bounding box prompt. Default: [0.30, 0.50, 0.70, 0.90]
+        - ~prompt_points (list): Points prompt. Default: [[0.50, 0.90]]
+        - ~prompt_text (str): Text prompt. Default: 'a person'
+        - ~use_bbox_fallback (bool): Use bbox prompt if text prompt does not detect anything. Default: False
+        - ~use_cuda (bool): Use CUDA for inference. Default: True
+        - ~brightness_window (float): Window size for calculating mean brightness. Default: 0.5
+        - ~mean_brightness (float): Mean brightness value. Default: 0.5
+        - ~frame_id (str): Frame ID for pointcloud. Default: ''
+        - ~verbose (bool): Verbose mode. Default: False
+        - ~publish_mask (bool): Publish segmented mask. Default: False
+        - ~publish_image (bool): Publish segmented image. Default: True
+        - ~publish_pointcloud (bool): Publish segmented pointcloud. Default: False
+        
+    Subscribed Topics:
+        - rgb_topic (sensor_msgs/Image): RGB image topic
+        - pointcloud_topic (sensor_msgs/PointCloud2): Pointcloud topic
+        
+    Published Topics:
+        - segmented_mask_topic (sensor_msgs/Image): Segmented mask topic
+        - segmented_image_topic (sensor_msgs/Image): Segmented image topic
+        - segmented_pointcloud_topic (sensor_msgs/PointCloud2): Segmented pointcloud topic
+    """
     
     def __init__(self) -> None:
         try:
@@ -67,9 +100,9 @@ class SegmentAnything:
             self.owl_roi = load_param('~owl_roi', "[]") # [x1, y1, x2, y2] in relative coordinates
             self.owl_roi = ast.literal_eval(self.owl_roi)
             if len(self.owl_roi) != 4:
-                self.owl_roi = [0.0, 0.0, 1.0, 1.0]
                 if len(self.owl_roi) != 0:
                     rospy.logwarn('{}: Invalid value for owl_roi parameter. Using full image for OWL prediction.'.format(rospy.get_name()))
+                self.owl_roi = [0.0, 0.0, 1.0, 1.0]
             
             # Prompt parameters
             self.prompt_type = load_param('~prompt_type', 'bbox') # bbox or points or text
@@ -107,7 +140,7 @@ class SegmentAnything:
                     self.prompt_text = [self.prompt_text]
                     self.prompt_text_encodings = self.owl_model.encode_text(self.prompt_text)
             elif self.prompt_type=='text':
-                raise Exception('{}: text prompt is only supported when use_cuda is set to True. Only bbox and points prompts are supported without CUDA. Exiting...'.format(rospy.get_name()))
+                raise Exception('text prompt is only supported when use_cuda is set to True. Only bbox and points prompts are supported without CUDA. Exiting...')
             
             # CV Bridge
             self.cv_bridge = CvBridge()
@@ -124,7 +157,7 @@ class SegmentAnything:
             if self.publish_pointcloud:
                 self.segmented_pointcloud_pub = rospy.Publisher(self.segmented_pointcloud_topic, PointCloud2, queue_size=1)
             if not (self.publish_mask or self.publish_image or self.publish_pointcloud):
-                raise Exception('{}: No output type enabled. Please set atleast one of publish_mask, publish_image, or publish_pointcloud parameters to True. Exiting...'.format(rospy.get_name()))
+                raise Exception('No output type enabled. Please set atleast one of publish_mask, publish_image, or publish_pointcloud parameters to True. Exiting...')
             
             # Subscribers
             if self.publish_pointcloud:
@@ -134,19 +167,19 @@ class SegmentAnything:
                 ], queue_size=1)
                 self.ts.registerCallback(self.callback)
             else:
-                self.rgb_sub = rospy.Subscriber(self.rgb_topic, Image, self.callback)
+                self.rgb_sub = rospy.Subscriber(self.rgb_topic, Image, self.callback, queue_size=1, buff_size=2**24)
             
             # Logging dictionary
             self.log_times = {}
             
         except Exception as e:
             # Log error
-            rospy.logfatal(e)
-            rospy.signal_shutdown('Error')
+            rospy.logfatal("{}: {}".format(rospy.get_name(), e))
+            rospy.signal_shutdown("Initialization failed: {}".format(e))
 
         else:
             # Log status
-            rospy.loginfo('{} node initialized with SAM model: {}, OWL model: {}, prompt type: {}, frame_id: {}, use_cuda: {}'.format(
+            rospy.loginfo('{}: Initialized successfully with SAM model: {}, OWL model: {}, prompt type: {}, frame_id: {}, use_cuda: {}'.format(
                 rospy.get_name(), self.sam_model_name, self.owl_model_name, self.prompt_type, self.frame_id, self.use_cuda))
             
     def run(self) -> None:
@@ -180,7 +213,7 @@ class SegmentAnything:
             image=image_roi,
             text=text,
             text_encodings=text_encodings,
-            pad_square=True,
+            pad_square=False,
             threshold=[threshold]
         )
         
@@ -190,7 +223,7 @@ class SegmentAnything:
             max_score_index = owl_output.scores.argmax()
             roi_bbox = [int(x) for x in owl_output.boxes[max_score_index]]
             # Shift the bbox from roi to the original image and clip to image boundaries
-            bbox = roi_bbox + 2*[roi[0], roi[1]]
+            bbox = [sum(x) for x in zip(roi_bbox, 2*[roi[0], roi[1]])]
             bbox[0] = max(0, bbox[0])
             bbox[1] = max(0, bbox[1])
             bbox[2] = min(image.width, bbox[2])
@@ -306,6 +339,7 @@ class SegmentAnything:
         # Publish segmented mask
         if self.publish_mask:
             segmented_mask_msg = self.cv_bridge.cv2_to_imgmsg(segmented_mask, encoding='mono8')
+            segmented_mask_msg.header = img_msg.header
             self.segmented_mask_pub.publish(segmented_mask_msg)
         
         # Publish segmented image
@@ -318,6 +352,7 @@ class SegmentAnything:
             if self.prompt_type=='bbox' or self.prompt_type=='text':
                 cv2.rectangle(segmented_image, (self.bbox[0], self.bbox[1]), (self.bbox[2], self.bbox[3]), (0,255,0), 2)        
             segmented_image_msg = self.cv_bridge.cv2_to_imgmsg(segmented_image, encoding='rgb8')
+            segmented_image_msg.header = img_msg.header
             self.segmented_image_pub.publish(segmented_image_msg)
             
         # Publish pointcloud

@@ -1,3 +1,2 @@
-ultralytics
+ultralytics==8.2.0
 filterpy
-open3d

@@ -58,13 +58,6 @@ class object_pose:
         self.tf_buf = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buf)
 
-        # rospy.loginfo('Waiting for transform to target_frame "%s"', self.FRAME_ID)
-        # while not self.tf_buf.can_transform(self.FRAME_ID, "zed_left_camera_optical_frame", rospy.Time(0)):
-        #     if rospy.is_shutdown():
-        #         return
-        # rospy.loginfo('Found transform to target_frame "%s"', self.FRAME_ID)
-
-
         ## Publishers
 
         self.pub_objectposes = rospy.Publisher(
@@ -206,12 +199,14 @@ class object_pose:
         marker.action = 0
         marker.pose.orientation.w = 1
         marker.scale = Vector3(0.2, 0.2, 0.2)
-        marker.color = ColorRGBA(0, 1, 0, 1)
         marker.lifetime = rospy.Duration(0.5)
 
         for objpose in msg.objects:
             if objpose.object.label == "person":
-                marker.points.append(objpose.pose.pose.position)
+                marker.colors.append(ColorRGBA(0, 1, 0, 1))
+            else:
+                marker.colors.append(ColorRGBA(1, 0, 0, 1))
+            marker.points.append(objpose.pose.pose.position)
 
         self.pub_objectmarkers.publish(marker)
 

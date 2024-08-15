@@ -7,55 +7,75 @@ Please refer to [svea](https://github.com/KTH-SML/svea) on how to install and ru
 
 ## ROS Nodes
 
+### aruco_detect.py
+TODO
+
+### detection_splitter.py
+TODO
+
 ### object_detect.py
 TODO
 
 ### object_pose.py
 TODO
 
-### aruco_detect.py
+### person_state_estimation.py
 TODO
 
 ### pedestrian_flow_estimate.py
 This ROS node, `pedestrian_flow_estimate.py`, subscribes to topics that provide detected pedestrian data, and publishes estimated speed and acceleration of these pedestrians.
 
-### sidewalk_segmentation.py
-This node subscribes to rgb image and point cloud topics and publishes a segmentation mask and a point cloud containing only the sidewalk. The script uses the `FastSAM` model for segmentation and supports three types of prompts for segmentation: bounding box, points, and text, which are configurable through parameters.
+### segment_anything.py
+The SegmentAnything ROS node performs object segmentation in images based on a given prompt, which can be a bounding box, points, or text. It uses the `FastSAM` model for segmentation, with optional use of the `NanoOwl` model to generate bounding boxes from text prompts. The node publishes the segmented mask, image, and point cloud data to specified ROS topics.
 
-_A note on performance of prompt types_: The bounding box prompt is the fastest, followed by the points prompt, and finally the text prompt. The average publishing time per frame for the bounding box prompt is ~0.3 seconds, for the points prompt it is ~0.5 seconds, and for the text prompt it is ~4.0 seconds when running on Zed Box with CUDA enabled and maximum power mode.
+#### Key Parameters
+- **Input Topics**
+    - `~rgb_topic` (string, default: "image"): Input topic for RGB images.
+    - `~pointcloud_topic` (string, default: "pointcloud"): Topic for point cloud data if 3D segmentation is required.
 
-#### Subscribed topics
-- `~rgb_topic` (sensor_msgs/Image)
-- `~pointcloud_topic` (sensor_msgs/PointCloud2)
+- **Model Configuration**
+    - `~sam_model_name` (string, default: "FastSAM-x.pt"): Selects the FastSAM model to use, either FastSAM-x.pt for higher accuracy or FastSAM-s.pt for faster performance.
+    - `~sam_conf` (float, default: 0.4): Confidence threshold for the segmentation model.
+    - `~sam_iou` (float, default: 0.9): IoU threshold for the segmentation model.
 
-#### Published topics
-- `~sidewalk_mask_topic` (sensor_msgs/Image)
-- `~sidewalk_pointcloud_topic` (sensor_msgs/PointCloud2)
-- `~sidewalk_ann_topic` (sensor_msgs/Image)
+- **Prompt Selection**
+    - `~prompt_type` (string, default: "bbox"): Type of prompt to guide the segmentation, with options being bbox, points, or text.
+    - `~prompt_bbox` (list of floats, default: [0.30, 0.50, 0.70, 0.90]): Bounding box prompt in the format [xmin, ymin, xmax, ymax] normalized to the image size.
+    - `~prompt_text` (string, default: "a person"): Text prompt to guide the segmentation. If using a text prompt, the NanoOwl model generates bounding boxes, which are then passed to FastSAM for segmentation.
 
-#### Parameters
-- `~rgb_topic` (default: 'image'): The topic for RGB images.
-- `~pointcloud_topic` (default: 'pointcloud'): The topic for point cloud data.
-- `~sidewalk_mask_topic` (default: 'sidewalk_mask'): The topic for the sidewalk mask.
-- `~sidewalk_pointcloud_topic` (default: 'sidewalk_pointcloud'): The topic for the sidewalk point cloud.
-- `~sidewalk_ann_topic` (default: 'sidewalk_ann'): The topic for sidewalk annotations.
-- `~model_name` (default: 'FastSAM-x.pt'): The name of the model to use. Options are 'FastSAM-s.pt' or 'FastSAM-x.pt'.
-- `~use_cuda` (default: False): Whether to use CUDA for computation.
-- `~conf` (default: 0.4): Confidence threshold for the model.
-- `~iou` (default: 0.9): Intersection over Union threshold for the model.
-- `~prompt_type` (default: 'bbox'): The type of prompt to use. Options are 'bbox', 'points', or 'text'.
-- `~bbox_prompt_corners` (default: [0.35, 0.50, 0.65, 0.95]): The corners of the bounding box prompt in relative coordinates (x1, y1, x2, y2). Only used if prompt_type is 'bbox'.
-- `~points_prompt_points` (default: [[0.50, 0.95]]): The points for the points prompt in relative coordinates (x, y). Only used if prompt_type is 'points'.
-- `~text_prompt_text` (default: 'a sidewalk or footpath or walkway or paved path for humans to walk on'): The text for the text prompt. Only used if prompt_type is 'text'.
-- `~publish_ann` (default: False): Whether to publish annotations.
+- **Publishing Options**
+    - `~publish_mask` (bool, default: False): Publish the segmented mask.
+    - `~publish_image` (bool, default: True): Publish the segmented image.
+    - `~publish_pointcloud` (bool, default: False): Publish the segmented point cloud.
+
+#### Performance Considerations
+The bounding box prompt is the fastest, followed by the points prompt, and finally the text prompt. The average publishing time per frame using `FastSAM-x` model for the bounding box prompt is ~0.3 seconds, for the points prompt it is ~0.35 seconds, and for the text prompt using `NanoOwl` model is ~0.4 seconds when running on Zed Box with CUDA enabled and maximum power mode. `FastSAM-s` model is faster than `FastSAM-x` model, but it is less accurate.
+
+### sidewalk_mapper.py
+SidewalkMapper class is a ROS node that subscribes to a pointcloud topic, the corresponding sidewalk mask topic, and the filtered pose topic to create an occupancy grid of the sidewalk.  
+_Important note_: The filtered pose topic should be the pose of the frame in which the pointcloud is published.
+
+#### Key Parameters
+- **Input Topics**
+    - `~pointcloud_topic` (string, default: "pointcloud"): The topic name of the pointcloud data.
+    - `~sidewalk_mask_topic` (string, default: "sidewalk_mask"): The topic name of the sidewalk mask data.
+    - `~filtered_pose_topic` (string, default: "filtered_pose"): The topic name of the filtered pose data.
+
+- **Sidewalk Configuration**
+    - `~sidewalk_z_min` (float, default: -0.5): The minimum z-value of the sidewalk.
+    - `~sidewalk_z_max` (float, default: 0.5): The maximum z-value of the sidewalk.
+    - `~non_sidewalk_z_min` (float, default: -1.0): The minimum z-value of the non-sidewalk.
+    - `~non_sidewalk_z_max` (float, default: 1.0): The maximum z-value of the non-sidewalk.
+
+- **Occupancy Grid Configuration**
+    - `~resolution` (float, default: 0.05): The resolution of the occupancy grid.
+    - `~width` (int, default: 50): The width of the occupancy grid.
+    - `~height` (int, default: 50): The height of the occupancy grid.
+    - `~grid_origin` (string, default: "center"): The origin of the grid, either "center" or "bottom".
 
 ### static_image_publisher.py
 This node publishes a static image or a set of static images from a directory to a topic at a fixed rate. The script is useful for testing other nodes that subscribe to image topics.
 
-#### Published topics
-- `~image_topic` (sensor_msgs/Image)
-
-#### Parameters
-- `~image_topic` (default: 'image'): The topic for the image.
-- `~image_path` (default: None): The path to the image or directory of images. If a directory is specified, the images will be published in a random order. This parameter is required.
-- `~rate` (default: 30.0): The rate at which to publish images in Hz.
+#### Key Parameters
+- **Image Path**
+    - `~image_path` (string): The path to a single image or a directory of images. If a directory is specified, the images are published in random order.

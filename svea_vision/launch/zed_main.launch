@@ -2,6 +2,8 @@
 <launch>
 
     <!-- Options -->
+    <arg name="camera_name"                     default="zed"/>
+    <arg name="camera_model"                    default="zed"/>
     <arg name="use_cuda"                        default="true"/>
     <arg name="enable_bbox_image"               default="false"/>
     <arg name="enable_aruco"                    default="false"/>
@@ -10,8 +12,8 @@
     <arg name="enable_sidewalk_segmentation"    default="false"/>
     <arg name="sidewalk_frame_id"               default=""/>
     <arg name="sidewalk_prompt_type"            default="bbox"/>
-    <arg name="sidewalk_prompt_text"            default="a sidewalk or footpath or walkway or paved path for humans to walk on"/>
-    <arg name="sidewalk_owl_roi"                default="[]"/>
+    <arg name="sidewalk_prompt_text"            default="a sidewalk or footpath or walkway or paved path"/>
+    <arg name="sidewalk_owl_roi"                default="[0.25, 0.50, 0.75, 0.95]"/>
     <arg name="verbose"                         default="false"/>
 
     <!-- Camera pose -->
@@ -44,15 +46,16 @@
     <node if="$(eval map_path != '')" pkg="map_server" name="map_server" type="map_server" args="$(arg map_path)"/>
 
     <!-- Nodes -->
-    <include file="$(find zed_wrapper)/launch/zed.launch">
-        <arg name="camera_name" value="zed"/>
-        <arg name="base_frame"  value="$(arg zed_base_frame)"/>
-        <arg name="cam_pos_x"   value="$(arg zed_cam_pos_x)"/>
-        <arg name="cam_pos_y"   value="$(arg zed_cam_pos_y)"/>
-        <arg name="cam_pos_z"   value="$(arg zed_cam_pos_z)"/>
-        <arg name="cam_roll"    value="$(arg zed_cam_roll)"/>
-        <arg name="cam_pitch"   value="$(arg zed_cam_pitch)"/>
-        <arg name="cam_yaw"     value="$(arg zed_cam_yaw)"/>
+    <include file="$(find zed_wrapper)/launch/zed_no_tf.launch">
+        <arg name="camera_name"     value="$(arg camera_name)"/>
+        <arg name="camera_model"    value="$(arg camera_model)"/>
+        <arg name="base_frame"      value="$(arg zed_base_frame)"/>
+        <arg name="cam_pos_x"       value="$(arg zed_cam_pos_x)"/>
+        <arg name="cam_pos_y"       value="$(arg zed_cam_pos_y)"/>
+        <arg name="cam_pos_z"       value="$(arg zed_cam_pos_z)"/>
+        <arg name="cam_roll"        value="$(arg zed_cam_roll)"/>
+        <arg name="cam_pitch"       value="$(arg zed_cam_pitch)"/>
+        <arg name="cam_yaw"         value="$(arg zed_cam_yaw)"/>
     </include>
 
     <include file="$(find svea_vision)/launch/object_pose.launch">
