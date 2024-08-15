@@ -22,6 +22,9 @@ TODO
 ### person_state_estimation.py
 TODO
 
+### pedestrian_flow_estimate.py
+This ROS node, `pedestrian_flow_estimate.py`, subscribes to topics that provide detected pedestrian data, and publishes estimated speed and acceleration of these pedestrians.
+
 ### segment_anything.py
 The SegmentAnything ROS node performs object segmentation in images based on a given prompt, which can be a bounding box, points, or text. It uses the `FastSAM` model for segmentation, with optional use of the `NanoOwl` model to generate bounding boxes from text prompts. The node publishes the segmented mask, image, and point cloud data to specified ROS topics.
 

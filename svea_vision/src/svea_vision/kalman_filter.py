@@ -30,7 +30,7 @@ class KF(KalmanFilter):
         self.id = id
         self.dt = 1 / frequency_of_measurements
 
-        process_variance = 0.13
+        process_variance = 0.03
         covariance = 2
         measurement_variance = 1  # Actual camera measurement noise (TBD)
         v_measurement_var = 0.003  # Assumed small
