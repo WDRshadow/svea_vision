@@ -12,6 +12,11 @@ from cv_bridge import CvBridge
 from tf2_sensor_msgs.tf2_sensor_msgs import do_transform_cloud
 from sensor_msgs.msg import Image, PointCloud2
 
+# NOTE: Getting a weird error if ultralytics is imported after the next import in Zed Box Orin
+from ultralytics import FastSAM
+from ultralytics.models.fastsam import FastSAMPrompt
+from nanoowl.owl_predictor import OwlPredictor as NanoOwlPredictor
+
 import os
 import time
 import ast
@@ -19,10 +24,6 @@ import cv2
 import PIL.Image
 import numpy as np
 from typing import Optional
-
-from ultralytics import FastSAM
-from ultralytics.models.fastsam import FastSAMPrompt
-from nanoowl.owl_predictor import OwlPredictor as NanoOwlPredictor
 
 np.float = float  # NOTE: Temporary fix for ros_numpy issue; check #39
 import ros_numpy
