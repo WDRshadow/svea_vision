@@ -1,57 +1,26 @@
-cmake_minimum_required(VERSION 3.0.2)
+cmake_minimum_required(VERSION 3.5)
 project(svea_vision_msgs)
 
-## Find catkin macros and libraries
-find_package(catkin REQUIRED COMPONENTS
-  geometry_msgs
-  message_generation
-  sensor_msgs
-  std_msgs
+find_package(ament_cmake REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+
+set(msg_files
+  "msg/Object.msg"
+  "msg/ObjectPose.msg"
+  "msg/StampedObjectArray.msg"
+  "msg/StampedObjectPoseArray.msg"
+  "msg/PersonState.msg"
+  "msg/PersonStateArray.msg"
 )
 
-################################################
-## Declare ROS messages, services and actions ##
-################################################
-
-## Generate messages in the 'msg' folder
-add_message_files(
-  FILES
-  Object.msg
-  ObjectPose.msg
-  StampedObjectArray.msg
-  StampedObjectPoseArray.msg
-  PersonState.msg
-  PersonStateArray.msg
+rosidl_generate_interfaces(${PROJECT_NAME}
+  ${msg_files}
+  DEPENDENCIES geometry_msgs sensor_msgs std_msgs
 )
 
-## Generate added messages and services with any dependencies listed here
-generate_messages(
-  DEPENDENCIES
-  geometry_msgs
-  sensor_msgs
-  std_msgs
-)
+ament_export_dependencies(rosidl_default_runtime)
 
-###################################
-## catkin specific configuration ##
-###################################
-
-## The catkin_package macro generates cmake config files for your package
-catkin_package(
-  CATKIN_DEPENDS
-  geometry_msgs
-  message_runtime
-  sensor_msgs
-  std_msgs
-)
-
-###########
-## Build ##
-###########
-
-## Specify additional locations of header files
-## Your package locations should be listed before other locations
-include_directories(
-  ${catkin_INCLUDE_DIRS}
-)
-
+ament_package()

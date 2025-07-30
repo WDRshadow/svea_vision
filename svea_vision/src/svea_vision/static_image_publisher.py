@@ -8,16 +8,19 @@ import os
 import cv2
 import random
 
-import rospy
+import rclpy
+from rclpy.node import Node
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 
-def load_param(name, value=None):
-    if value is None:
-        assert rospy.has_param(name), f'Missing parameter "{name}"'
-    return rospy.get_param(name, value)
 
-class PublishImage:
+def load_param(node: Node, name, value=None):
+    param = node.get_parameter_or(name, rclpy.parameter.Parameter(name, rclpy.Parameter.Type.STRING, value))
+    if param.type_ == rclpy.Parameter.Type.NOT_SET and value is None:
+        raise RuntimeError(f'Missing parameter "{name}"')
+    return param.value
+
+class PublishImage(Node):
     """
     This class is a ROS node that publishes an image or a set of images to a topic at a specified rate. The image(s) can be specified as a single image path or a directory of images.
     
@@ -34,29 +37,32 @@ class PublishImage:
     """
 
     def __init__(self):
+        super().__init__('static_image_publisher')
         try:
-            # Initialize node
-            rospy.init_node('static_image_publisher', anonymous=True)
             
             # Parameters
-            self.image_topic = load_param('~image_topic', 'static_image')
-            self.image_path = load_param('~image_path') # Path to a single image or a directory of images
-            self.rate = load_param('~rate', 30)
+            self.declare_parameter('image_topic', 'static_image')
+            self.declare_parameter('image_path', '')
+            self.declare_parameter('rate', 30)
+
+            self.image_topic = load_param(self, 'image_topic', 'static_image')
+            self.image_path = load_param(self, 'image_path')
+            self.rate = load_param(self, 'rate', 30)
 
             # CV Bridge
             self.cv_bridge = CvBridge()
 
             # Publisher
-            self.img_pub = rospy.Publisher(self.image_topic, Image, queue_size=1)
+            self.img_pub = self.create_publisher(Image, self.image_topic, 1)
 
         except Exception as e:
             # Log error
-            rospy.logfatal("{}: {}".format(rospy.get_name(), e))
-            rospy.signal_shutdown("Initialization failed: {}".format(e))            
+            self.get_logger().fatal(str(e))
+            rclpy.shutdown()
 
         else:
             # Log status
-            rospy.loginfo('{} node initialized.'.format(rospy.get_name()))
+            self.get_logger().info('Node initialized')
 
     def run(self):
         # Check if image path is a directory
@@ -73,18 +79,20 @@ class PublishImage:
         img_msgs = [self.cv_bridge.cv2_to_imgmsg(img, encoding='bgr8') for img in imgs]
 
         # Publish and sleep loop
-        rate = rospy.Rate(self.rate)
+        self.timer = self.create_timer(1.0 / self.rate, lambda: self.img_pub.publish(random.choice(img_msgs)))
         try:
-            while not rospy.is_shutdown():
-                # Publish a random image
-                self.img_pub.publish(img_msgs[random.randint(0, len(img_msgs)-1)])
-                rate.sleep()
+            rclpy.spin(self)
+        except KeyboardInterrupt:
+            self.get_logger().info('Shutting down')
 
-        # Exit gracefully
-        except rospy.ROSInterruptException:
-            rospy.loginfo('Shutting down {}'.format(rospy.get_name()))
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = PublishImage()
+    node.run()
+    node.destroy_node()
+    rclpy.shutdown()
 
 
 if __name__ == "__main__":
-    node = PublishImage()
-    node.run()
+    main()
